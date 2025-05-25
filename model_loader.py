@@ -1,69 +1,85 @@
-import logging
 import pickle
-import os
+import logging
 from pathlib import Path
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 
-def get_model_version():
-    """Get model version from environment variable."""
-    return os.getenv("MODEL_VERSION", "1")
+# === CTR Model Loader ===
+def load_ctr_model(model_path=None):
+    """
+    Load the CTR regression model from disk.
+    Returns (model_data, error_message); error_message is None on success.
+    Expected model_data keys: 'model', 'feature_names'.
+    """
+    if model_path is None:
+        base = Path(__file__).parent.resolve()
+        model_path = base / "model_output" / "ctr_regressor.pkl"
+
+    # Ensure Path object and check existence
+    model_path = Path(model_path)
+    if not model_path.exists():
+        err = f"Model file not found: {model_path}"
+        logging.error(err)
+        return None, err
+
+    try:
+        with open(model_path, "rb") as f:
+            model_data = pickle.load(f)
+
+        # Validate required keys
+        required = {"model", "feature_names"}
+        missing = required - set(model_data.keys())
+        if missing:
+            raise KeyError(f"Missing keys in model_data: {missing}")
+
+        # Log model info if available
+        num_features = len(model_data["feature_names"])
+        model_type = type(model_data["model"]).__name__
+        logging.info(f"Loaded CTR model from: {model_path}")
+        logging.info(f"Model type: {model_type}, Features: {num_features}")
+
+        # Log performance info if available (from updated training script)
+        if "performance" in model_data:
+            perf = model_data["performance"]
+            logging.info(
+                f"Model performance - Test RMSE: {perf.get('test_rmse', 'N/A'):.4f}"
+            )
+
+        return model_data, None
+
+    except (pickle.PickleError, EOFError) as e:
+        err = f"Corrupted model file: {str(e)}"
+        logging.error(f"Failed to load CTR model from {model_path}: {err}")
+        return None, err
+    except Exception as e:
+        err = str(e)
+        logging.error(f"Failed to load CTR model from {model_path}: {err}")
+        return None, err
 
 
+def validate_features(model_data, feature_df):
+    """
+    Validate that feature DataFrame has all required columns for the model.
+    Returns (is_valid, missing_features).
+    """
+    required_features = set(model_data["feature_names"])
+    available_features = set(feature_df.columns)
+    missing = required_features - available_features
+
+    if missing:
+        logging.warning(f"Missing features for model prediction: {list(missing)}")
+        return False, list(missing)
+
+    return True, []
+
+
+# === Model Paths Configuration ===
 def get_model_paths():
     """
     Returns a dict of file paths required by the Streamlit dashboard.
-    Now incorporates MODEL_VERSION from .env file with smart fallbacks.
     """
     base = Path(__file__).parent.resolve()
-    model_version = get_model_version()
-
-    # Try versioned paths first, then fall back to non-versioned
-    versioned_data_dir = (
-        base / "data" / "preprocessed" / f"v{model_version}" / "processed_data"
-    )
-    default_data_dir = base / "data" / "preprocessed" / "processed_data"
-
-    # Use versioned if it exists, otherwise use default WITHOUT warning
-    if versioned_data_dir.exists():
-        data_dir = versioned_data_dir
-    else:
-        data_dir = default_data_dir
-        # Remove the warning - it's normal to use default
-
-    # Check for versioned model directory
-    versioned_model_dir = base / "model_output" / f"v{model_version}"
-    default_model_dir = base / "model_output"
-
-    if versioned_model_dir.exists():
-        model_dir = versioned_model_dir
-    else:
-        model_dir = default_model_dir
-
-    # Check for different model file naming patterns
-    model_file_candidates = [
-        model_dir / "ctr_regressor.pkl",
-        model_dir / f"ctr_regressor_{model_version}.pkl",
-        base
-        / "model_output"
-        / f"ctr_regressor_{model_version}.pkl",  # Check root model_output
-        base / "model_output" / "ctr_regressor_1.pkl",  # Your specific file
-        base / "model_output" / "ctr_regressor.pkl",  # Non-versioned fallback
-    ]
-
-    ctr_model_path = None
-    for candidate in model_file_candidates:
-        if candidate.exists():
-            ctr_model_path = candidate
-            logging.info(f"Found CTR model at: {candidate}")
-            break
-
-    if not ctr_model_path:
-        ctr_model_path = model_dir / "ctr_regressor.pkl"  # Default fallback
-        logging.warning(f"No CTR model found, using default path: {ctr_model_path}")
+    data_dir = base / "data" / "preprocessed" / "processed_data"
+    model_dir = base / "model_output"
 
     paths = {
         # Processed feature matrices (parquet format)
@@ -78,7 +94,7 @@ def get_model_paths():
         "faiss_index": data_dir.parent / "faiss_index.idx",
         "embedding_metadata": data_dir.parent / "embedding_metadata.pkl",
         # Model artifacts
-        "ctr_model": ctr_model_path,
+        "ctr_model": model_dir / "ctr_regressor_1.pkl",
         "feature_metadata": data_dir / "feature_metadata.json",
         "label_encoder": data_dir / "label_encoder.json",
         "editorial_guidelines": data_dir / "editorial_guidelines.json",
@@ -104,52 +120,6 @@ def get_model_paths():
         logging.info("Run preprocessing and training scripts to generate missing files")
 
     return paths
-
-
-def load_ctr_model(model_path):
-    """
-    Load the CTR model from pickle file.
-    Returns (model_data, error_message).
-    """
-    try:
-        print(f"🔍 Attempting to load model from: {model_path}")
-
-        if not model_path.exists():
-            error_msg = f"Model file not found: {model_path}"
-            print(f"❌ {error_msg}")
-            return None, error_msg
-
-        print("✅ Model file exists, loading...")
-        with open(model_path, "rb") as f:
-            model_data = pickle.load(f)
-
-        print(f"✅ Model loaded, type: {type(model_data)}")
-
-        # Validate model data structure
-        if not isinstance(model_data, dict):
-            error_msg = "Invalid model file format - expected dict"
-            print(f"❌ {error_msg}")
-            return None, error_msg
-
-        print(f"✅ Model keys: {list(model_data.keys())}")
-
-        required_keys = ["model", "feature_names"]
-        missing_keys = [key for key in required_keys if key not in model_data]
-        if missing_keys:
-            error_msg = f"Missing keys in model file: {missing_keys}"
-            print(f"❌ {error_msg}")
-            return None, error_msg
-
-        print("🎉 Model validation successful! Returning (model_data, None)")
-        return model_data, None
-
-    except Exception as e:
-        error_msg = f"Error loading model: {str(e)}"
-        print(f"💥 Exception: {error_msg}")
-        import traceback
-
-        traceback.print_exc()
-        return None, error_msg
 
 
 def check_pipeline_status():
@@ -187,7 +157,6 @@ def check_pipeline_status():
 def get_critical_paths():
     """
     Returns only the essential paths needed for basic functionality.
-    Use this for minimal requirements checking.
     """
     paths = get_model_paths()
 
@@ -199,56 +168,3 @@ def get_critical_paths():
     }
 
     return critical
-
-
-def create_minimal_test_data():
-    """
-    Create minimal test data files if they don't exist.
-    This allows the app to launch for development/testing.
-    """
-    import pandas as pd
-    import json
-    import numpy as np
-
-    paths = get_model_paths()
-
-    # Create directories if they don't exist
-    for path in paths.values():
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Create minimal feature data
-    if not paths["train_features"].exists():
-        dummy_features = pd.DataFrame(
-            {
-                "title_length": [50, 60, 40],
-                "title_word_count": [8, 10, 6],
-                "has_question": [0, 1, 0],
-            }
-        )
-        dummy_features.to_parquet(paths["train_features"])
-        logging.info("Created dummy train_features")
-
-    # Create minimal target data
-    if not paths["train_targets"].exists():
-        dummy_targets = pd.DataFrame({"ctr": [0.05, 0.08, 0.03]})
-        dummy_targets.to_parquet(paths["train_targets"])
-        logging.info("Created dummy train_targets")
-
-    # Create minimal metadata
-    if not paths["feature_metadata"].exists():
-        metadata = {
-            "embedding_dim": 50,
-            "feature_names": ["title_length", "title_word_count", "has_question"],
-        }
-        with open(paths["feature_metadata"], "w") as f:
-            json.dump(metadata, f)
-        logging.info("Created dummy feature_metadata")
-
-
-if __name__ == "__main__":
-    # Test the functions
-    logging.basicConfig(level=logging.INFO)
-    print(f"Model version: {get_model_version()}")
-    paths = get_model_paths()
-    status = check_pipeline_status()
-    print(f"Pipeline status: {status}")

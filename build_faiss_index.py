@@ -12,122 +12,129 @@ INDEX_OUT = PREP_DIR / "faiss_index.idx"
 METADATA_OUT = PREP_DIR / "embedding_metadata.pkl"
 
 
-def rebuild_faiss_with_consistent_embeddings():
-    """Rebuild FAISS index using the exact same method as Streamlit search."""
+def load_processed_data():
+    """Load all processed datasets and combine for embedding generation."""
+    # Load the three splits
+    try:
+        # Try loading from parquet files first (preferred)
+        train_data = pd.read_parquet(PREP_DIR / "processed_data" / "X_train.parquet")
+        val_data = pd.read_parquet(PREP_DIR / "processed_data" / "X_val.parquet")
+        test_data = pd.read_parquet(PREP_DIR / "processed_data" / "X_test.parquet")
 
-    print("🔧 Rebuilding FAISS index with consistent embeddings...")
+        # Load target data to get the original dataframes with titles
+        y_train = pd.read_parquet(PREP_DIR / "processed_data" / "y_train.parquet")
+        y_val = pd.read_parquet(PREP_DIR / "processed_data" / "y_val.parquet")
+        y_test = pd.read_parquet(PREP_DIR / "processed_data" / "y_test.parquet")
 
-    # Load headlines from MIND dataset (same as Streamlit)
-    base_dir = Path.cwd()
-    news_file = base_dir / "source_data" / "train_data" / "news.tsv"
+        print("Loaded from parquet files")
+        return None  # Need original data with titles
 
-    if not news_file.exists():
-        raise FileNotFoundError(f"Cannot find {news_file}")
+    except FileNotFoundError:
+        # Fallback to CSV if available
+        csv_path = PREP_DIR / "news_with_engagement.csv"
+        if csv_path.exists():
+            df = pd.read_csv(csv_path)
+            print(f"Loaded from CSV: {len(df)} articles")
+            return df
+        else:
+            raise FileNotFoundError("No processed data found. Run preprocessing first.")
 
-    print(f"📂 Loading headlines from {news_file}")
 
-    # Load MIND dataset format
-    df = pd.read_csv(
-        news_file,
-        sep="\t",
-        header=None,
-        names=[
-            "NewsID",
-            "Category",
-            "SubCategory",
-            "Title",
-            "Abstract",
-            "URL",
-            "TitleEntities",
-            "AbstractEntities",
-        ],
-    )
+def build_embeddings_from_preprocessing():
+    """Build embeddings using the same approach as preprocessing pipeline."""
+    # Load processed feature matrices to get article indices
+    X_train = pd.read_parquet(PREP_DIR / "processed_data" / "X_train.parquet")
+    X_val = pd.read_parquet(PREP_DIR / "processed_data" / "X_val.parquet")
+    X_test = pd.read_parquet(PREP_DIR / "processed_data" / "X_test.parquet")
 
-    # Clean titles
-    titles = df["Title"].fillna("").astype(str).tolist()
-    valid_titles = [t.strip() for t in titles if t.strip()]
+    # Extract existing embeddings from feature matrices
+    emb_cols = [col for col in X_train.columns if col.startswith("emb_")]
 
-    print(f"📊 Loaded {len(valid_titles)} valid headlines")
-    print(f"📝 Sample titles: {valid_titles[:3]}")
+    if emb_cols:
+        print(f"Found {len(emb_cols)} embedding columns in processed data")
 
-    # Use same embedder as Streamlit
-    print("🤖 Loading sentence transformer...")
+        # Combine embeddings from all splits
+        train_embs = X_train[emb_cols].values
+        val_embs = X_val[emb_cols].values
+        test_embs = X_test[emb_cols].values
+
+        all_embeddings = np.vstack([train_embs, val_embs, test_embs])
+
+        # Create newsID mapping (use indices as IDs since we don't have original newsIDs easily)
+        all_indices = list(X_train.index) + list(X_val.index) + list(X_test.index)
+
+        # Add split information for each article
+        split_labels = (
+            ["train"] * len(X_train) + ["val"] * len(X_val) + ["test"] * len(X_test)
+        )
+
+        return all_embeddings, all_indices, split_labels
+
+    else:
+        raise ValueError("No embedding columns found in processed data")
+
+
+# Main execution
+try:
+    # Try to use embeddings from preprocessing pipeline
+    print("Extracting embeddings from processed feature matrices...")
+    embeddings, article_indices, split_labels = build_embeddings_from_preprocessing()
+
+except Exception as e:
+    print(f"Could not extract from processed data: {e}")
+    print("Falling back to computing fresh embeddings...")
+
+    # Fallback: load CSV and compute fresh embeddings
+    df = load_processed_data()
+    if df is None:
+        raise ValueError("No data source available")
+
+    titles = df["title"].fillna("").tolist()
+    article_indices = df.index.tolist()
+    split_labels = ["unknown"] * len(df)
+
+    print("Computing fresh embeddings...")
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    embeddings = embedder.encode(titles, show_progress_bar=True)
 
-    # Generate full embeddings then truncate to 50D (exactly like Streamlit search after fix)
-    print("⚡ Generating embeddings...")
-    full_embeddings = embedder.encode(valid_titles, show_progress_bar=True)
+print(f"Total articles: {len(embeddings)}")
+print(f"Embedding dimension: {embeddings.shape[1]}")
 
-    # Truncate to 50D to match your preprocessing pipeline expectation
-    embeddings = full_embeddings[:, :50]
+# Build FAISS index
+print("Building FAISS index...")
+d = embeddings.shape[1]
+index = faiss.IndexFlatL2(d)
+index.add(embeddings.astype("float32"))
 
-    print(
-        f"✂️ Truncated embeddings to {embeddings.shape[1]}D (from {full_embeddings.shape[1]}D)"
+# Save everything
+with open(EMBEDDINGS_OUT, "wb") as f:
+    pickle.dump(
+        {
+            "embeddings": embeddings,
+            "article_indices": article_indices,
+            "split_labels": split_labels,
+            "embedding_dim": d,
+        },
+        f,
     )
 
-    # Create article indices that match the headline positions
-    article_indices = list(range(len(valid_titles)))
-    split_labels = ["train"] * len(valid_titles)
-
-    # Build FAISS index
-    print("🏗️ Building FAISS index...")
-    d = embeddings.shape[1]
-    index = faiss.IndexFlatL2(d)
-    index.add(embeddings.astype("float32"))
-
-    # Save embeddings and metadata
-    print("💾 Saving embeddings...")
-    with open(EMBEDDINGS_OUT, "wb") as f:
-        pickle.dump(
-            {
-                "embeddings": embeddings,
-                "article_indices": article_indices,
-                "split_labels": split_labels,
-                "embedding_dim": d,
-                "titles": valid_titles,  # Include titles for easier debugging
+with open(METADATA_OUT, "wb") as f:
+    pickle.dump(
+        {
+            "total_articles": len(embeddings),
+            "embedding_dimension": d,
+            "splits": {
+                "train": sum(1 for x in split_labels if x == "train"),
+                "val": sum(1 for x in split_labels if x == "val"),
+                "test": sum(1 for x in split_labels if x == "test"),
             },
-            f,
-        )
+        },
+        f,
+    )
 
-    with open(METADATA_OUT, "wb") as f:
-        pickle.dump(
-            {
-                "total_articles": len(valid_titles),
-                "embedding_dimension": d,
-                "method": "sentence_transformer_truncated_50d",
-                "model": "all-MiniLM-L6-v2",
-                "splits": {
-                    "train": len(valid_titles),
-                    "val": 0,
-                    "test": 0,
-                },
-            },
-            f,
-        )
+faiss.write_index(index, str(INDEX_OUT))
 
-    # Save FAISS index
-    print("💾 Saving FAISS index...")
-    faiss.write_index(index, str(INDEX_OUT))
-
-    # Test the index with a sample query
-    print("\n🧪 Testing the rebuilt index...")
-    test_query = "trump tariffs trade war"
-    q_emb = embedder.encode([test_query])[:, :50].astype("float32")
-
-    D, I = index.search(q_emb, 3)
-
-    print(f"🔍 Test search for '{test_query}':")
-    for i, (dist, idx) in enumerate(zip(D[0], I[0])):
-        if idx < len(valid_titles):
-            print(f"  {i+1}. {valid_titles[idx]} (distance: {dist:.3f})")
-
-    print(f"\n✅ Successfully rebuilt FAISS index!")
-    print(f"📁 Saved to:")
-    print(f"   - {EMBEDDINGS_OUT}")
-    print(f"   - {INDEX_OUT}")
-    print(f"   - {METADATA_OUT}")
-    print(f"\n🎯 Index contains {len(valid_titles)} articles with {d}D embeddings")
-
-
-if __name__ == "__main__":
-    rebuild_faiss_with_consistent_embeddings()
+print(f"Saved embeddings to {EMBEDDINGS_OUT}")
+print(f"Saved metadata to {METADATA_OUT}")
+print(f"Saved FAISS index to {INDEX_OUT}")
+print("Embedding index build completed successfully")

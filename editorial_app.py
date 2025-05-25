@@ -5,23 +5,10 @@ import faiss
 import pickle
 import json
 import openai
-import re
-import numpy as np
 from sentence_transformers import SentenceTransformer
 from pathlib import Path
-from textstat import flesch_reading_ease
-from dotenv import load_dotenv
-
-load_dotenv()
-import os
-
 from model_loader import get_model_paths, check_pipeline_status, load_ctr_model
-import logging
-
-logger = logging.getLogger(__name__)
-
-# Clear cache for debugging
-st.cache_resource.clear()
+from textstat import flesch_reading_ease
 
 # App Configuration & Custom Styles
 st.set_page_config(
@@ -59,11 +46,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # Helper Functions
-# Add this code to your streamlit_app.py right after the load_resources function definition
-# Replace the existing load_resources function with this version:
-
-
 @st.cache_resource
 def load_resources():
     """Load all required resources with error handling."""
@@ -81,76 +65,6 @@ def load_resources():
         # Load processed data
         train_features = pd.read_parquet(paths["train_features"])
         train_targets = pd.read_parquet(paths["train_targets"])
-
-        # Look for original headlines from MIND dataset
-        titles_mapping = {}
-        print("🔍 Looking for MIND dataset headlines...")
-
-        try:
-            base_dir = Path(__file__).parent
-            source_data_paths = [
-                base_dir / "source_data" / "train_data",
-                base_dir / "source_data" / "val_data",
-                base_dir / "source_data" / "test_data",
-            ]
-
-            for data_path in source_data_paths:
-                print(f"📂 Checking: {data_path}")
-                if data_path.exists():
-                    # Look for MIND dataset news.tsv files
-                    news_file = data_path / "news.tsv"
-                    if news_file.exists():
-                        print(f"📄 Found news.tsv in {data_path.name}")
-                        try:
-                            # MIND dataset format: NewsID, Category, SubCategory, Title, Abstract, URL, TitleEntities, AbstractEntities
-                            df = pd.read_csv(
-                                news_file,
-                                sep="\t",
-                                header=None,
-                                names=[
-                                    "NewsID",
-                                    "Category",
-                                    "SubCategory",
-                                    "Title",
-                                    "Abstract",
-                                    "URL",
-                                    "TitleEntities",
-                                    "AbstractEntities",
-                                ],
-                            )
-
-                            print(f"📊 Read {len(df)} articles from {data_path.name}")
-
-                            # Create mapping from index to title
-                            for idx, title in enumerate(df["Title"]):
-                                if pd.notna(title) and str(title).strip():
-                                    titles_mapping[idx] = str(title).strip()
-
-                            print(
-                                f"✅ Added {len([t for t in df['Title'] if pd.notna(t)])} valid headlines"
-                            )
-
-                            # Show a sample
-                            sample_titles = df["Title"].dropna().head(3).tolist()
-                            print(f"📝 Sample headlines: {sample_titles}")
-
-                            break  # Use first successful file (train data preferred)
-
-                        except Exception as e:
-                            print(f"❌ Error reading {news_file}: {e}")
-                    else:
-                        print(f"❌ No news.tsv found in {data_path}")
-                else:
-                    print(f"❌ Directory doesn't exist: {data_path}")
-
-            if titles_mapping:
-                print(f"🎉 Successfully loaded {len(titles_mapping)} headlines total")
-            else:
-                print("⚠️ No headlines loaded - will use placeholders")
-
-        except Exception as e:
-            print(f"💥 Error in headline loading: {e}")
-            titles_mapping = {}
 
         # Load metadata
         with open(paths["feature_metadata"], "r") as f:
@@ -195,7 +109,6 @@ def load_resources():
             "ctr_model": ctr_model,
             "feature_names": feature_names,
             "embedder": embedder,
-            "titles_mapping": titles_mapping,
             "status": status,
         }
 
@@ -213,6 +126,10 @@ images_dir = Path("images")
 images_dir.mkdir(exist_ok=True)
 
 print("Creating images folder for Streamlit app...")
+
+# You can either:
+# Option 1: Add your own news-related JPG images to the images/ folder
+# Option 2: Use this script to download some placeholder images
 
 
 def download_placeholder_images():
@@ -244,6 +161,9 @@ def download_placeholder_images():
         except Exception as e:
             print(f"Error downloading image {i}: {e}")
 
+
+# Uncomment to download placeholder images:
+# download_placeholder_images()
 
 # Or manually add your own images:
 print(f"\n📁 Add 10 JPG images to: {images_dir.absolute()}")
@@ -356,166 +276,81 @@ with tab1:
 
         if st.button("Search & Rank Articles"):
             try:
-                # Generate query embedding (truncated to 50D to match index)
-                # Generate query embedding using same method as preprocessing
-                query_features = extract_features_updated(
-                    [query], resources["embedder"], resources["feature_metadata"]
-                )
-                emb_cols = [
-                    col for col in query_features.columns if col.startswith("emb_")
-                ]
-                q_emb = query_features[emb_cols].values.astype("float32")
+                # Generate query embedding
+                q_emb = resources["embedder"].encode([query]).astype("float32")
 
-                # Search the index
+                # Check dimensions match
+                index_dim = resources["index"].d
+                query_dim = q_emb.shape[1]
+
+                st.write(
+                    f"Debug: Index dimension: {index_dim}, Query dimension: {query_dim}"
+                )
+
+                if query_dim != index_dim:
+                    # Adjust query embedding to match index dimension
+                    if query_dim > index_dim:
+                        # Truncate if query embedding is larger
+                        q_emb = q_emb[:, :index_dim]
+                        st.warning(
+                            f"Truncated query embedding from {query_dim} to {index_dim} dimensions"
+                        )
+                    else:
+                        # Pad if query embedding is smaller
+                        padding = np.zeros(
+                            (q_emb.shape[0], index_dim - query_dim), dtype=np.float32
+                        )
+                        q_emb = np.concatenate([q_emb, padding], axis=1)
+                        st.warning(
+                            f"Padded query embedding from {query_dim} to {index_dim} dimensions"
+                        )
+
+                # Search with corrected dimensions
                 D, I = resources["index"].search(q_emb, k)
 
                 # Check if we have valid results
                 if len(I[0]) == 0:
                     st.error("No results found")
                 else:
-                    # Get article indices and create results
-                    results = []
-                    for i, (distance, idx) in enumerate(zip(D[0], I[0])):
+                    # Get article indices (handle potential index mismatches)
+                    article_indices = []
+                    for idx in I[0]:
                         if idx < len(resources["emb_data"]["article_indices"]):
-                            article_idx = resources["emb_data"]["article_indices"][idx]
-
-                            # Convert FAISS distance to relevance score with amplified differences
-                            relevance_score = np.exp(-distance * 3)  # Exponential decay
-                            relevance_percentage = 0.50 + (relevance_score * 0.45)
-                            relevance_percentage = min(
-                                0.95, max(0.10, relevance_percentage)
+                            article_indices.append(
+                                resources["emb_data"]["article_indices"][idx]
                             )
+                        else:
+                            st.warning(f"Index {idx} out of range, skipping")
 
-                            # Try to get actual headline from loaded titles
-                            headline = None
+                    # Create results dataframe
+                    results = []
+                    for i, (similarity_score, article_idx) in enumerate(
+                        zip(D[0], article_indices)
+                    ):
+                        if i < len(resources["emb_data"]["split_labels"]):
+                            split_label = resources["emb_data"]["split_labels"][I[0][i]]
+                        else:
+                            split_label = "unknown"
 
-                            # Check if we have titles_mapping
-                            if (
-                                "titles_mapping" in resources
-                                and resources["titles_mapping"]
-                            ):
-                                titles_dict = resources["titles_mapping"]
-
-                                # Method 1: Direct lookup by article_idx
-                                if article_idx in titles_dict:
-                                    headline = titles_dict[article_idx]
-
-                                # Method 2: Use modulo mapping for large indices
-                                elif len(titles_dict) > 0:
-                                    mapped_idx = article_idx % len(titles_dict)
-                                    headlines_list = list(titles_dict.values())
-                                    if mapped_idx < len(headlines_list):
-                                        headline = headlines_list[mapped_idx]
-
-                            # Fallback: create meaningful placeholder
-                            if not headline or not headline.strip():
-                                query_words = query.lower().split()
-                                if any(
-                                    word in query_words
-                                    for word in ["tech", "technology", "ai", "software"]
-                                ):
-                                    topic = "Tech"
-                                elif any(
-                                    word in query_words
-                                    for word in ["business", "finance", "economy"]
-                                ):
-                                    topic = "Business"
-                                elif any(
-                                    word in query_words
-                                    for word in ["health", "medical", "healthcare"]
-                                ):
-                                    topic = "Health"
-                                elif any(
-                                    word in query_words
-                                    for word in ["politics", "election", "government"]
-                                ):
-                                    topic = "Politics"
-                                elif any(
-                                    word in query_words
-                                    for word in ["climate", "environment", "green"]
-                                ):
-                                    topic = "Climate"
-                                else:
-                                    topic = "News"
-
-                                headline = f"{topic} Article #{article_idx} (Related to: {query})"
-
-                            results.append(
-                                {
-                                    "Rank": i + 1,
-                                    "Related Article": headline,
-                                    "Relevance": f"{relevance_percentage:.1%}",
-                                    "ID": article_idx,
-                                    "Raw_Distance": float(distance),
-                                }
-                            )
+                        results.append(
+                            {
+                                "Rank": i + 1,
+                                "Article_ID": f"Article_{article_idx}",
+                                "Similarity_Score": float(similarity_score),
+                                "Split": split_label,
+                            }
+                        )
 
                     if results:
-                        # Sort by raw distance (smaller = better)
                         results_df = pd.DataFrame(results)
-                        results_df = results_df.sort_values(
-                            "Raw_Distance", ascending=True
+                        st.success(f"Found {len(results)} similar articles")
+                        st.dataframe(results_df, use_container_width=True)
+
+                        # Show search statistics
+                        avg_similarity = np.mean(
+                            [r["Similarity_Score"] for r in results]
                         )
-                        results_df["Rank"] = range(
-                            1, len(results_df) + 1
-                        )  # Rerank after sorting
-
-                        # Display main results
-                        display_df = results_df[
-                            ["Rank", "Related Article", "Relevance"]
-                        ].copy()
-
-                        st.success(
-                            f"Found {len(results)} relevant articles for: '{query}'"
-                        )
-                        st.dataframe(
-                            display_df, use_container_width=True, hide_index=True
-                        )
-
-                        # Add this right after: st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-                        # TEMP DEBUG TEST
-                        if st.session_state.get(
-                            "Show Debug Info (distances and IDs)", False
-                        ):
-                            st.write("**🔧 DEBUG TABLE:**")
-                            debug_cols = [
-                                "Rank",
-                                "Related Article",
-                                "Relevance",
-                                "Raw_Distance",
-                                "ID",
-                            ]
-                            if all(col in results_df.columns for col in debug_cols):
-                                debug_df = results_df[debug_cols].copy()
-                                st.dataframe(
-                                    debug_df, use_container_width=True, hide_index=True
-                                )
-                            else:
-                                st.write(
-                                    f"Missing columns. Available: {list(results_df.columns)}"
-                                )
-                                st.write("Sample data:")
-                                st.write(results_df.head())
-
-                        # Show best match relevance
-                        best_relevance = results_df.iloc[0]["Relevance"]
-                        st.metric("Best Match Relevance", best_relevance)
-
-                        # Debug info checkbox
-                        if st.checkbox("Show Debug Info (distances and IDs)"):
-                            debug_cols = [
-                                "Rank",
-                                "Related Article",
-                                "Relevance",
-                                "Raw_Distance",
-                                "ID",
-                            ]
-                            debug_df = results_df[debug_cols].copy()
-                            st.subheader("Debug Information")
-                            st.dataframe(
-                                debug_df, use_container_width=True, hide_index=True
-                            )
+                        st.metric("Average Similarity", f"{avg_similarity:.4f}")
                     else:
                         st.error("No valid results to display")
 
@@ -525,9 +360,10 @@ with tab1:
                 st.write(f"- Query: '{query}'")
                 st.write(f"- Embeddings available: {resources['emb_data'] is not None}")
                 st.write(f"- Index available: {resources['index'] is not None}")
-                import traceback
-
-                st.code(traceback.format_exc())
+                if resources["emb_data"]:
+                    st.write(
+                        f"- Embedding data keys: {list(resources['emb_data'].keys())}"
+                    )
 
 with tab2:
     st.header("⚡ Instant CTR Prediction")
@@ -571,85 +407,50 @@ with tab3:
     if not resources["status"]["training_completed"]:
         st.warning("CTR model not available. Please run training script first.")
     else:
-        original = st.text_input(
-            "Original Headline:",
-            "Billy Joel cancels tour after brain condition diagnosis",
-        )
+        original = st.text_input("Original Headline:", "")
         n = st.slider("Variations to Create:", 1, 5, 3)
 
-        if st.button("Generate & Score") and original:
-            # Get API key from environment
-            openai_key = os.getenv("OPENAI_API_KEY")
+        # OpenAI API key input
+        openai_key = st.text_input("OpenAI API Key:", type="password")
 
-            if not openai_key:
-                st.error(
-                    "OpenAI API key not found. Please add OPENAI_API_KEY to your .env file."
-                )
-                st.stop()
-
+        if st.button("Generate & Score") and original and openai_key:
             # Set OpenAI API key
             openai.api_key = openai_key
             client = openai.OpenAI(api_key=openai_key)
 
-            improved_instructions = """
-You are an expert news headline editor. Your goal is to rewrite headlines to increase click-through rates while maintaining accuracy.
-
-Guidelines for high-CTR headlines:
-1. Use compelling action words and emotional triggers
-2. Create curiosity or urgency without being clickbait
-3. Include specific numbers, names, or details when possible
-4. Keep under 70 characters for optimal display
-5. Maintain factual accuracy - never invent details
-6. Consider the reader's emotional response
-
-For medical/health news:
-- Emphasize impact on people's lives
-- Use accessible language, not medical jargon
-- Focus on what readers need to know
-
-For the headline: "{original}"
-
-Please create {n} improved versions that would likely get higher click-through rates. Each should be on its own line without numbering or bullets.
+            detailed_instructions = """
+You are a data-driven news editor. When rewriting the headline, follow these guidelines:
+1. Preserve factual accuracy and key entities.
+2. Improve predicted click-through rate (CTR).
+3. Enhance readability (aim for a Flesch Reading Ease score ≥ 60).
+4. Maintain semantic similarity to the original.
+5. Keep the headline under 70 characters.
 """
 
-            prompt = improved_instructions.format(original=original, n=n)
+            prompt = (
+                f"{detailed_instructions}\n"
+                f"Original: {original}\n"
+                f"Rewrites (provide {n} options, each on its own line):"
+            )
 
             try:
                 response = client.chat.completions.create(
                     model="gpt-4",
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "You are an expert news headline editor focused on increasing engagement while maintaining journalistic integrity.",
-                        },
+                        {"role": "system", "content": detailed_instructions.strip()},
                         {"role": "user", "content": prompt},
                     ],
                     n=1,
-                    temperature=0.8,  # Higher temperature for more creative variations
-                    max_tokens=200,
+                    temperature=0.7,
                 )
 
-                # Extract and clean candidates
+                # Extract and score candidates
                 text = response.choices[0].message.content.strip()
-                candidates = []
-                for line in text.splitlines():
-                    clean_line = line.strip()
-                    # Remove numbering, bullets, dashes
-                    clean_line = re.sub(r"^\d+[\.\)]\s*", "", clean_line)
-                    clean_line = re.sub(r"^[-•*]\s*", "", clean_line)
-                    clean_line = clean_line.strip("\"'")
-                    if (
-                        clean_line and len(clean_line) > 10
-                    ):  # Only keep substantial headlines
-                        candidates.append(clean_line)
-
-                candidates = candidates[:n]  # Limit to requested number
-
-                if not candidates:
-                    st.error(
-                        "Failed to generate valid headline variations. Please try again."
-                    )
-                    st.stop()
+                candidates = [
+                    line.strip("- ").strip()
+                    for line in text.splitlines()
+                    if line.strip()
+                ][:n]
 
                 # Score original and candidates
                 orig_feats = extract_features_updated(
@@ -658,9 +459,7 @@ Please create {n} improved versions that would likely get higher click-through r
                 orig_ctr = resources["ctr_model"].predict(
                     orig_feats[resources["feature_names"]]
                 )[0]
-
-                # Get original embedding (truncated to 50D)
-                orig_emb = resources["embedder"].encode([original])[:, :50][0]
+                orig_emb = resources["embedder"].encode([original])[0]
 
                 rows = []
                 for cand in candidates:
@@ -671,11 +470,7 @@ Please create {n} improved versions that would likely get higher click-through r
                         feats[resources["feature_names"]]
                     )[0]
                     read = flesch_reading_ease(cand) if cand.strip() else 0
-
-                    # Get candidate embedding (truncated to 50D)
-                    cand_emb = resources["embedder"].encode([cand])[:, :50][0]
-                    sim = cosine_sim(orig_emb, cand_emb)
-
+                    sim = cosine_sim(orig_emb, resources["embedder"].encode([cand])[0])
                     rows.append(
                         {
                             "Candidate": cand,
@@ -685,70 +480,37 @@ Please create {n} improved versions that would likely get higher click-through r
                         }
                     )
 
-                # Sort by CTR (highest first)
                 df_res = pd.DataFrame(rows).sort_values("CTR", ascending=False)
+                best_ctr = df_res["CTR"].iloc[0]
+                improvement = best_ctr - orig_ctr
 
-                if len(df_res) > 0:
-                    best_ctr = df_res["CTR"].iloc[0]
-                    improvement = best_ctr - orig_ctr
+                # Display results
+                st.metric("Original CTR", f"{orig_ctr:.1%}")
+                st.metric(
+                    "Best Variation CTR", f"{best_ctr:.1%}", delta=f"{improvement:.1%}"
+                )
 
-                    # Display results
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Original CTR", f"{orig_ctr:.1%}")
-                    with col2:
-                        st.metric(
-                            "Best Variation CTR",
-                            f"{best_ctr:.1%}",
-                            delta=f"{improvement:.1%}",
-                        )
+                # Format and display table
+                df_res["CTR"] = df_res["CTR"].map(lambda v: f"{v:.1%}")
+                df_res["Readability"] = df_res["Readability"].map(lambda v: f"{v:.1f}")
+                df_res["Similarity"] = df_res["Similarity"].map(lambda v: f"{v:.2f}")
+                st.table(df_res.reset_index(drop=True))
 
-                    # Format and display table
-                    df_display = df_res.copy()
-                    df_display["CTR"] = df_display["CTR"].map(lambda v: f"{v:.1%}")
-                    df_display["Readability"] = df_display["Readability"].map(
-                        lambda v: f"{v:.1f}"
-                    )
-                    df_display["Similarity"] = df_display["Similarity"].map(
-                        lambda v: f"{v:.2f}"
-                    )
-
-                    st.subheader("Generated Variations (Ranked by Predicted CTR)")
-                    st.dataframe(
-                        df_display.reset_index(drop=True),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-
-                    # Display usage info
-                    st.info(f"OpenAI tokens used: {response.usage.total_tokens}")
-                else:
-                    st.error("No valid headline variations were generated.")
+                # Display usage info
+                st.info(f"OpenAI tokens used: {response.usage.total_tokens}")
 
             except Exception as e:
                 st.error(f"Error calling OpenAI API: {str(e)}")
-                import traceback
 
-                st.code(traceback.format_exc())
+# Sidebar with additional info
+with st.sidebar:
+    st.header("📊 Pipeline Status")
+    for stage, completed in resources["status"].items():
+        status_icon = "✅" if completed else "❌"
+        st.write(f"{status_icon} {stage.replace('_', ' ').title()}")
 
-    # Sidebar with additional info
-    with st.sidebar:
-        st.header("📊 Pipeline Status")
-        for stage, completed in resources["status"].items():
-            status_icon = "✅" if completed else "❌"
-            st.write(f"{status_icon} {stage.replace('_', ' ').title()}")
-
-        # Add model info section
-        if resources["status"]["training_completed"]:
-            st.header("🤖 Model Info")
-            st.write(f"**Model Type:** {type(resources['ctr_model']).__name__}")
-            st.write(f"**Features:** {len(resources['feature_names'])}")
-            st.write(f"**Version:** {os.getenv('MODEL_VERSION', 'Unknown')}")
-            model_path = get_model_paths()["ctr_model"]
-            st.write(f"**File:** {model_path.name}")
-
-        if resources["status"]["training_completed"] and "performance" in resources:
-            st.header("📈 Model Performance")
-            perf = resources["performance"]
-            st.metric("Test RMSE", f"{perf.get('test_rmse', 'N/A'):.4f}")
-            st.metric("Test MAE", f"{perf.get('test_mae', 'N/A'):.4f}")
+    if resources["status"]["training_completed"] and "performance" in resources:
+        st.header("📈 Model Performance")
+        perf = resources["performance"]
+        st.metric("Test RMSE", f"{perf.get('test_rmse', 'N/A'):.4f}")
+        st.metric("Test MAE", f"{perf.get('test_mae', 'N/A'):.4f}")
