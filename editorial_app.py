@@ -9,6 +9,8 @@ from sentence_transformers import SentenceTransformer
 from pathlib import Path
 from model_loader import get_model_paths, check_pipeline_status, load_ctr_model
 from textstat import flesch_reading_ease
+import datetime
+import random
 
 # App Configuration & Custom Styles
 st.set_page_config(
@@ -38,6 +40,13 @@ st.markdown(
     .stTable td, .stTable th {
         padding: 4px 8px !important;
         font-size: 12px !important;
+    }
+    .metric-card {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #e9ecef;
+        margin: 0.5rem 0;
     }
     </style>
     """,
@@ -81,18 +90,20 @@ def load_resources():
             emb_data = None
             index = None
 
-        # Load CTR model
+        # Load CTR model (prioritize LightGBM for compatibility)
         if status["training_completed"]:
             model_data, err = load_ctr_model(paths["ctr_model"])
             if err:
                 st.error(f"Error loading CTR model: {err}")
                 st.stop()
             ctr_model = model_data["model"]
-            feature_names = model_data["feature_names"]
+            feature_names = model_data.get("feature_names", [])
+            model_type = model_data.get("model_type", "lightgbm")
         else:
             st.warning("CTR model not trained. Please run training script first.")
             ctr_model = None
             feature_names = None
+            model_type = None
 
         # Load sentence transformer
         embedder = SentenceTransformer("all-MiniLM-L6-v2")
@@ -106,6 +117,7 @@ def load_resources():
             "index": index,
             "ctr_model": ctr_model,
             "feature_names": feature_names,
+            "model_type": model_type,
             "embedder": embedder,
             "status": status,
         }
@@ -115,122 +127,217 @@ def load_resources():
         st.stop()
 
 
-import os
-import requests
-from pathlib import Path
+def extract_enhanced_features(
+    headline,
+    category="news",
+    publish_time=None,
+    day_type="Weekday",
+    embedder=None,
+    feature_metadata=None,
+):
+    """Enhanced feature extraction that matches your preprocessing pipeline."""
 
-# Create images directory
-images_dir = Path("images")
-images_dir.mkdir(exist_ok=True)
+    if publish_time is None:
+        publish_time = datetime.datetime.now()
 
-print("Creating images folder for Streamlit app...")
-
-# You can either:
-# Option 1: Add your own news-related JPG images to the images/ folder
-# Option 2: Use this script to download some placeholder images
-
-
-def download_placeholder_images():
-    """Download placeholder images for the news editor app."""
-
-    # Placeholder image URLs (from picsum for demo purposes)
-    image_urls = [
-        "https://picsum.photos/800/400?random=1",
-        "https://picsum.photos/800/400?random=2",
-        "https://picsum.photos/800/400?random=3",
-        "https://picsum.photos/800/400?random=4",
-        "https://picsum.photos/800/400?random=5",
-        "https://picsum.photos/800/400?random=6",
-        "https://picsum.photos/800/400?random=7",
-        "https://picsum.photos/800/400?random=8",
-        "https://picsum.photos/800/400?random=9",
-        "https://picsum.photos/800/400?random=10",
-    ]
-
-    for i, url in enumerate(image_urls, 1):
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                with open(images_dir / f"news_image_{i}.jpg", "wb") as f:
-                    f.write(response.content)
-                print(f"Downloaded image {i}/10")
-            else:
-                print(f"Failed to download image {i}")
-        except Exception as e:
-            print(f"Error downloading image {i}: {e}")
-
-
-# Uncomment to download placeholder images:
-# download_placeholder_images()
-
-# Or manually add your own images:
-print(f"\n📁 Add 10 JPG images to: {images_dir.absolute()}")
-print("Suggested news-related images:")
-print("- news_header_1.jpg")
-print("- news_header_2.jpg")
-print("- ... (any 10 JPG files)")
-print("\nThe Streamlit app will randomly select one to display as a header image.")
-
-# Check current images
-current_images = list(images_dir.glob("*.jpg"))
-print(f"\nCurrently found {len(current_images)} JPG images in images folder:")
-for img in current_images:
-    print(f"- {img.name}")
-
-if len(current_images) == 0:
-    print(
-        "\n⚠️  No images found. Add some JPG files to the images/ folder or run download_placeholder_images()"
-    )
-else:
-    print(
-        f"\n✅ Ready! Streamlit app will randomly show one of these {len(current_images)} images."
-    )
-
-
-def extract_features_updated(titles, embedder, feature_metadata):
-    """Extract features matching the preprocessing pipeline."""
-    embs = embedder.encode(titles)
-    rows = []
-
-    for i, title in enumerate(titles):
-        feat = {
-            # Text features
-            "title_length": len(title),
-            "abstract_length": 50,  # Default
-            "title_word_count": len(title.split()),
-            "abstract_word_count": 10,  # Default
-            "title_reading_ease": flesch_reading_ease(title) if title.strip() else 0,
-            "abstract_reading_ease": 60,  # Default
-            # Pattern features
-            "has_question": int("?" in title),
-            "has_exclamation": int("!" in title),
-            "has_number": int(any(c.isdigit() for c in title)),
-            "has_colon": int(":" in title),
-            "has_quotes": int(any(q in title for q in ['"', "'"])),
-            "has_hyphen": int("-" in title),
-            "has_brackets": int(any(b in title for b in "[]())")),
-            # Capitalization features
-            "title_upper_ratio": (
-                sum(c.isupper() for c in title) / len(title) if title else 0
-            ),
-            "starts_with_caps": int(title[0].isupper() if title else False),
-            # Temporal features (defaults)
-            "hour": 12,
-            "day_of_week": 1,
-            "is_weekend": 0,
-            "time_of_day": 1,
-            # Category (default)
-            "category_enc": 0,
-        }
-
-        # Add embeddings
+    # Generate embeddings
+    if embedder is not None:
+        embs = embedder.encode([headline])
         emb_dim = feature_metadata.get("embedding_dim", 50)
-        for j in range(min(emb_dim, embs.shape[1])):
-            feat[f"emb_{j}"] = embs[i, j]
+    else:
+        embs = np.zeros((1, 50))
+        emb_dim = 50
 
-        rows.append(feat)
+    # Basic text features
+    title_words = headline.split() if headline else []
 
-    return pd.DataFrame(rows)
+    features = {
+        # Text analysis features
+        "title_length": len(headline) if headline else 0,
+        "abstract_length": 100,  # Default for abstract
+        "title_word_count": len(title_words),
+        "abstract_word_count": 15,  # Default
+        "title_reading_ease": flesch_reading_ease(headline) if headline.strip() else 50,
+        "abstract_reading_ease": 60,  # Default
+        # Pattern features
+        "has_question": int("?" in headline),
+        "has_exclamation": int("!" in headline),
+        "has_number": int(any(c.isdigit() for c in headline)),
+        "has_colon": int(":" in headline),
+        "has_quotes": int(any(q in headline for q in ['"', "'"])),
+        "has_hyphen": int("-" in headline),
+        "has_brackets": int(any(b in headline for b in "[]())")),
+        # Capitalization features
+        "title_upper_ratio": (
+            sum(c.isupper() for c in headline) / len(headline) if headline else 0
+        ),
+        "starts_with_caps": int(headline[0].isupper() if headline else False),
+        # Enhanced temporal features
+        "hour": publish_time.hour,
+        "day_of_week": publish_time.weekday(),
+        "is_weekend": int(day_type == "Weekend" or publish_time.weekday() >= 5),
+        # News-specific temporal patterns
+        "is_morning": int(6 <= publish_time.hour < 12),
+        "is_lunch": int(11 <= publish_time.hour < 14),
+        "is_evening": int(17 <= publish_time.hour < 22),
+        "is_night": int(publish_time.hour >= 22 or publish_time.hour < 6),
+        "is_commute_time": int(
+            (7 <= publish_time.hour <= 9) or (17 <= publish_time.hour <= 19)
+        ),
+        "is_prime_time": int(19 <= publish_time.hour <= 23),
+        # Cyclical encoding
+        "hour_sin": np.sin(2 * np.pi * publish_time.hour / 24),
+        "hour_cos": np.cos(2 * np.pi * publish_time.hour / 24),
+        "day_sin": np.sin(2 * np.pi * publish_time.weekday() / 7),
+        "day_cos": np.cos(2 * np.pi * publish_time.weekday() / 7),
+        # Content freshness (assume recent)
+        "hours_since_published": 1.0,
+        "is_breaking_news": int(
+            any(word in headline.lower() for word in ["breaking", "urgent", "just in"])
+        ),
+        "is_stale_news": 0,  # Assume fresh
+        # Category encoding
+        "category_enc": {
+            "news": 0,
+            "sports": 1,
+            "entertainment": 2,
+            "finance": 3,
+            "lifestyle": 4,
+            "technology": 5,
+        }.get(category.lower(), 0),
+        # Context features
+        "title_complexity": len(headline) / len(title_words) if title_words else 0,
+        "title_sentiment_words": len(
+            [
+                w
+                for w in title_words
+                if w.lower()
+                in ["amazing", "shocking", "exclusive", "breaking", "urgent"]
+            ]
+        ),
+        "has_detailed_abstract": 1,  # Assume yes
+        "abstract_title_ratio": 100 / (len(headline) + 1),  # Default ratio
+    }
+
+    # Add embeddings
+    for j in range(min(emb_dim, embs.shape[1])):
+        features[f"emb_{j}"] = embs[0, j]
+
+    return pd.DataFrame([features])
+
+
+def predict_ctr_enhanced(headline, category, publish_time, day_type, resources):
+    """Enhanced CTR prediction with better feature matching and NaN handling."""
+    try:
+        # Extract features with enhanced pipeline
+        features_df = extract_enhanced_features(
+            headline,
+            category,
+            publish_time,
+            day_type,
+            resources["embedder"],
+            resources["feature_metadata"],
+        )
+
+        # Get available features in the model
+        model_features = resources["feature_names"]
+
+        if not model_features:
+            st.warning("No model features available. Using default prediction.")
+            return 0.01
+
+        # Match features (use available ones, fill missing with defaults)
+        final_features = []
+        for feat_name in model_features:
+            if feat_name in features_df.columns:
+                value = features_df[feat_name].iloc[0]
+                # Handle NaN values
+                if pd.isna(value):
+                    if "emb_" in feat_name:
+                        final_features.append(0.0)
+                    elif "category" in feat_name:
+                        final_features.append(0)
+                    else:
+                        final_features.append(0.0)
+                else:
+                    final_features.append(float(value))
+            else:
+                # Provide reasonable defaults for missing features
+                if "emb_" in feat_name:
+                    final_features.append(0.0)
+                elif "category" in feat_name:
+                    final_features.append(0)
+                elif "hour" in feat_name:
+                    final_features.append(12.0)  # Default to noon
+                elif "day" in feat_name:
+                    final_features.append(2.0)  # Default to Tuesday
+                else:
+                    final_features.append(0.0)
+
+        # Ensure we have the right number of features
+        if len(final_features) != len(model_features):
+            st.warning(
+                f"Feature mismatch: expected {len(model_features)}, got {len(final_features)}"
+            )
+            return 0.01
+
+        # Make prediction
+        if resources["model_type"] == "lightgbm":
+            prediction = resources["ctr_model"].predict([final_features])[0]
+        else:
+            # Fallback for other model types
+            prediction = 0.01  # Default prediction
+
+        # Handle NaN predictions
+        if pd.isna(prediction):
+            prediction = 0.01
+
+        return max(0, min(1, float(prediction)))  # Clamp between 0 and 1
+
+    except Exception as e:
+        st.error(f"Prediction error: {str(e)}")
+        return 0.01
+
+
+def get_ctr_insights(ctr_prediction, category, publish_time):
+    """Provide insights about the CTR prediction."""
+    insights = []
+
+    # Performance assessment
+    if ctr_prediction > 0.02:
+        insights.append(
+            "🚀 **High Performance** - This headline is predicted to perform well"
+        )
+    elif ctr_prediction > 0.01:
+        insights.append("📈 **Moderate Performance** - Decent engagement expected")
+    else:
+        insights.append("📉 **Low Performance** - Consider optimizing this headline")
+
+    # Time-based insights
+    hour = publish_time.hour
+    if 7 <= hour <= 9:
+        insights.append("☕ **Morning Commute** - Good time for news consumption")
+    elif 12 <= hour <= 14:
+        insights.append("🍽️ **Lunch Time** - Popular reading period")
+    elif 17 <= hour <= 19:
+        insights.append("🚗 **Evening Commute** - Peak engagement time")
+    elif 19 <= hour <= 23:
+        insights.append("📺 **Prime Time** - High attention period")
+
+    # Category insights
+    category_tips = {
+        "news": "📰 Breaking news and urgent updates perform best",
+        "sports": "⚽ Game results and player news drive engagement",
+        "entertainment": "🎬 Celebrity news and trending topics work well",
+        "finance": "💰 Market updates and investment advice are popular",
+        "lifestyle": "✨ How-to guides and tips generate interest",
+        "technology": "🔧 Product launches and reviews perform well",
+    }
+
+    if category.lower() in category_tips:
+        insights.append(category_tips[category.lower()])
+
+    return insights
 
 
 def cosine_sim(a, b):
@@ -242,273 +349,538 @@ with st.spinner("Loading models and data..."):
     resources = load_resources()
 
 # Load header image
-import random
-
-img_dir = Path(__file__).parent / "images"
+img_dir = Path("images")
 if img_dir.exists():
     all_images = list(img_dir.glob("*.jpg"))
-    selected = random.choice(all_images) if all_images else None
-    if selected:
-        st.image(str(selected), width=500)
+    if all_images:
+        selected = random.choice(all_images)
+        st.image(str(selected), width=600)
 
 st.title("📰 Agentic AI News Editor")
+st.markdown("*Enhanced with temporal intelligence and contextual features*")
 
 # Display pipeline status
 if not all(resources["status"].values()):
-    with st.expander("Pipeline Status", expanded=True):
+    with st.expander("⚙️ Pipeline Status", expanded=True):
         for stage, completed in resources["status"].items():
             status_icon = "✅" if completed else "❌"
             st.write(f"{status_icon} {stage.replace('_', ' ').title()}")
 
 # UI Tabs
-tab1, tab2, tab3 = st.tabs(["Retrieve & Rank", "Predict CTR", "Rewrite Headline"])
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["🔍 Retrieve & Rank", "⚡ Predict CTR", "✍️ Rewrite Headlines", "📊 Analytics"]
+)
 
 with tab1:
-    st.header("🔍 Retrieval & Ranking")
+    st.header("🔍 Article Retrieval & Ranking")
+    st.markdown("Find similar articles using semantic search")
 
     if not resources["status"]["embeddings_completed"]:
-        st.warning("Embeddings not available. Please run embedding script first.")
+        st.warning("⚠️ Embeddings not available. Please run embedding script first.")
     else:
-        query = st.text_input("Query:", "big tech layoffs")
-        k = st.slider("Top K articles:", 1, 20, 5)
+        col1, col2 = st.columns([3, 1])
 
-        if st.button("Search & Rank Articles"):
+        with col1:
+            query = st.text_input(
+                "Search Query:",
+                "big tech layoffs",
+                help="Enter keywords to find similar articles",
+            )
+        with col2:
+            k = st.slider("Top K results:", 1, 20, 5)
+
+        if st.button("🔍 Search Articles", type="primary"):
             try:
                 # Generate query embedding
                 q_emb = resources["embedder"].encode([query]).astype("float32")
 
-                # Check dimensions match
+                # Handle dimension matching
                 index_dim = resources["index"].d
                 query_dim = q_emb.shape[1]
 
-                st.write(
-                    f"Debug: Index dimension: {index_dim}, Query dimension: {query_dim}"
-                )
-
                 if query_dim != index_dim:
-                    # Adjust query embedding to match index dimension
                     if query_dim > index_dim:
-                        # Truncate if query embedding is larger
                         q_emb = q_emb[:, :index_dim]
-                        st.warning(
-                            f"Truncated query embedding from {query_dim} to {index_dim} dimensions"
+                        st.info(
+                            f"Adjusted embedding dimensions: {query_dim} → {index_dim}"
                         )
                     else:
-                        # Pad if query embedding is smaller
                         padding = np.zeros(
                             (q_emb.shape[0], index_dim - query_dim), dtype=np.float32
                         )
                         q_emb = np.concatenate([q_emb, padding], axis=1)
-                        st.warning(
-                            f"Padded query embedding from {query_dim} to {index_dim} dimensions"
-                        )
 
-                # Search with corrected dimensions
+                # Search
                 D, I = resources["index"].search(q_emb, k)
 
-                # Check if we have valid results
-                if len(I[0]) == 0:
-                    st.error("No results found")
-                else:
-                    # Get article indices (handle potential index mismatches)
-                    article_indices = []
-                    for idx in I[0]:
-                        if idx < len(resources["emb_data"]["article_indices"]):
-                            article_indices.append(
-                                resources["emb_data"]["article_indices"][idx]
-                            )
-                        else:
-                            st.warning(f"Index {idx} out of range, skipping")
-
-                    # Create results dataframe
+                if len(I[0]) > 0:
+                    # Create results
                     results = []
-                    for i, (similarity_score, article_idx) in enumerate(
-                        zip(D[0], article_indices)
-                    ):
-                        if i < len(resources["emb_data"]["split_labels"]):
-                            split_label = resources["emb_data"]["split_labels"][I[0][i]]
-                        else:
-                            split_label = "unknown"
+                    for i, (similarity_score, idx) in enumerate(zip(D[0], I[0])):
+                        if idx < len(resources["emb_data"]["article_indices"]):
+                            article_idx = resources["emb_data"]["article_indices"][idx]
+                            split_label = (
+                                resources["emb_data"]["split_labels"][idx]
+                                if idx < len(resources["emb_data"]["split_labels"])
+                                else "unknown"
+                            )
 
-                        results.append(
-                            {
-                                "Rank": i + 1,
-                                "Article_ID": f"Article_{article_idx}",
-                                "Similarity_Score": float(similarity_score),
-                                "Split": split_label,
-                            }
-                        )
+                            results.append(
+                                {
+                                    "Rank": i + 1,
+                                    "Article_ID": f"Article_{article_idx}",
+                                    "Similarity": f"{float(similarity_score):.4f}",
+                                    "Dataset": split_label.title(),
+                                    "Relevance": (
+                                        "🔥 High"
+                                        if similarity_score < 0.5
+                                        else (
+                                            "📈 Medium"
+                                            if similarity_score < 1.0
+                                            else "📊 Low"
+                                        )
+                                    ),
+                                }
+                            )
 
                     if results:
-                        results_df = pd.DataFrame(results)
-                        st.success(f"Found {len(results)} similar articles")
-                        st.dataframe(results_df, use_container_width=True)
+                        st.success(f"✅ Found {len(results)} similar articles")
 
-                        # Show search statistics
-                        avg_similarity = np.mean(
-                            [r["Similarity_Score"] for r in results]
+                        # Display results in a nice format
+                        results_df = pd.DataFrame(results)
+                        st.dataframe(
+                            results_df, use_container_width=True, hide_index=True
                         )
-                        st.metric("Average Similarity", f"{avg_similarity:.4f}")
+
+                        # Show statistics
+                        avg_similarity = np.mean(
+                            [float(r["Similarity"]) for r in results]
+                        )
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("🎯 Avg Similarity", f"{avg_similarity:.4f}")
+                        with col2:
+                            st.metric("📊 Results Found", len(results))
+                        with col3:
+                            st.metric("🔍 Query Terms", len(query.split()))
                     else:
-                        st.error("No valid results to display")
+                        st.error("❌ No valid results found")
+                else:
+                    st.error("❌ No results found for this query")
 
             except Exception as e:
-                st.error(f"Search failed: {str(e)}")
-                st.write("Debug info:")
-                st.write(f"- Query: '{query}'")
-                st.write(f"- Embeddings available: {resources['emb_data'] is not None}")
-                st.write(f"- Index available: {resources['index'] is not None}")
-                if resources["emb_data"]:
-                    st.write(
-                        f"- Embedding data keys: {list(resources['emb_data'].keys())}"
-                    )
+                st.error(f"❌ Search failed: {str(e)}")
 
 with tab2:
-    st.header("⚡ Instant CTR Prediction")
-    st.markdown("Type or paste a candidate headline and get an instant CTR estimate.")
+    st.header("⚡ Advanced CTR Prediction")
+    st.markdown("Get precise CTR estimates with contextual intelligence")
 
     if not resources["status"]["training_completed"]:
-        st.warning("CTR model not available. Please run training script first.")
+        st.warning("⚠️ CTR model not available. Please run training script first.")
     else:
-        col_input, col_ref = st.columns([2, 1])
+        # Enhanced input form
+        with st.form("ctr_prediction_form"):
+            st.subheader("📝 Headline Details")
 
-        with col_input:
-            headline = st.text_input("Headline:", key="predict_input")
-            if st.button("Predict CTR", key="predict_btn") and headline:
-                feats = extract_features_updated(
-                    [headline], resources["embedder"], resources["feature_metadata"]
+            col1, col2 = st.columns(2)
+
+            with col1:
+                headline = st.text_input(
+                    "Headline Text:",
+                    placeholder="Enter your headline here...",
+                    help="The headline you want to analyze",
                 )
-                pred = resources["ctr_model"].predict(
-                    feats[resources["feature_names"]]
-                )[0]
-                st.metric("Predicted CTR", f"{pred:.1%}")
 
-        with col_ref:
-            st.markdown("**🔎 Reference Statistics**")
+                category = st.selectbox(
+                    "📂 Category:",
+                    [
+                        "news",
+                        "sports",
+                        "entertainment",
+                        "finance",
+                        "lifestyle",
+                        "technology",
+                    ],
+                    help="Select the content category",
+                )
 
-            # Calculate stats from training data
+            with col2:
+                publish_time = st.time_input(
+                    "🕐 Publish Time:",
+                    value=datetime.time(12, 0),
+                    help="When will this be published?",
+                )
+
+                day_type = st.radio(
+                    "📅 Day Type:",
+                    ["Weekday", "Weekend"],
+                    help="Affects reader behavior patterns",
+                )
+
+            predict_btn = st.form_submit_button("🚀 Predict CTR", type="primary")
+
+        if predict_btn and headline:
+            # Create datetime object for prediction
+            current_date = datetime.datetime.now().date()
+            publish_datetime = datetime.datetime.combine(current_date, publish_time)
+
+            # Make prediction
+            with st.spinner("🔮 Analyzing headline..."):
+                ctr_prediction = predict_ctr_enhanced(
+                    headline, category, publish_datetime, day_type, resources
+                )
+
+            # Display results
+            st.markdown("---")
+            st.subheader("📊 Prediction Results")
+
+            # Main metrics
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric(
+                    "🎯 Predicted CTR",
+                    f"{ctr_prediction:.3%}",
+                    help="Expected click-through rate",
+                )
+
+            with col2:
+                # Calculate relative performance
+                baseline_ctr = resources["train_targets"]["ctr"].mean()
+                improvement = ((ctr_prediction - baseline_ctr) / baseline_ctr) * 100
+                st.metric(
+                    "📈 vs Baseline",
+                    f"{improvement:+.1f}%",
+                    delta=f"{improvement:+.1f}%",
+                    help="Performance vs average headline",
+                )
+
+            with col3:
+                # Estimated clicks per 1000 impressions
+                clicks_per_1k = ctr_prediction * 1000
+                st.metric(
+                    "👆 Clicks/1K Views",
+                    f"{clicks_per_1k:.1f}",
+                    help="Expected clicks per 1000 impressions",
+                )
+
+            # Insights
+            st.subheader("💡 AI Insights")
+            insights = get_ctr_insights(ctr_prediction, category, publish_datetime)
+            for insight in insights:
+                st.markdown(f"• {insight}")
+
+            # Feature analysis
+            with st.expander("🔍 Feature Analysis"):
+                features_df = extract_enhanced_features(
+                    headline,
+                    category,
+                    publish_datetime,
+                    day_type,
+                    resources["embedder"],
+                    resources["feature_metadata"],
+                )
+
+                # Show key features
+                key_features = {
+                    "Title Length": features_df["title_length"].iloc[0],
+                    "Word Count": features_df["title_word_count"].iloc[0],
+                    "Readability Score": f"{features_df['title_reading_ease'].iloc[0]:.1f}",
+                    "Hour": features_df["hour"].iloc[0],
+                    "Has Question": (
+                        "Yes" if features_df["has_question"].iloc[0] else "No"
+                    ),
+                    "Has Numbers": "Yes" if features_df["has_number"].iloc[0] else "No",
+                    "Breaking News": (
+                        "Yes" if features_df["is_breaking_news"].iloc[0] else "No"
+                    ),
+                }
+
+                for feature, value in key_features.items():
+                    st.markdown(f"**{feature}:** {value}")
+
+        # Reference statistics
+        st.markdown("---")
+        st.subheader("📋 Reference Statistics")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**🔎 Dataset Statistics**")
             train_ctr_mean = resources["train_targets"]["ctr"].mean()
             train_ctr_with_impressions = resources["train_targets"][
                 resources["train_targets"]["ctr"] > 0
             ]["ctr"]
 
-            st.metric("Overall Mean CTR", f"{train_ctr_mean:.2%}")
+            st.metric("Overall Mean CTR", f"{train_ctr_mean:.3%}")
             if len(train_ctr_with_impressions) > 0:
                 st.metric(
-                    "Mean CTR (with impressions)",
-                    f"{train_ctr_with_impressions.mean():.2%}",
+                    "Mean CTR (with clicks)", f"{train_ctr_with_impressions.mean():.3%}"
                 )
+
+        with col2:
+            st.markdown("**⏰ Best Publishing Times**")
+            st.markdown("• **Morning**: 7-9 AM (commute)")
+            st.markdown("• **Lunch**: 12-2 PM (break time)")
+            st.markdown("• **Evening**: 5-7 PM (commute)")
+            st.markdown("• **Prime**: 7-11 PM (leisure)")
 
 with tab3:
-    st.header("✍️ Headline Rewriting")
+    st.header("✍️ AI-Powered Headline Rewriting")
+    st.markdown("Generate optimized headlines using GPT-4")
 
     if not resources["status"]["training_completed"]:
-        st.warning("CTR model not available. Please run training script first.")
+        st.warning("⚠️ CTR model not available. Please run training script first.")
     else:
-        original = st.text_input("Original Headline:", "")
-        n = st.slider("Variations to Create:", 1, 5, 3)
+        # Input form
+        with st.form("headline_rewriting_form"):
+            st.subheader("📝 Original Headline")
 
-        # OpenAI API key input
-        openai_key = st.text_input("OpenAI API Key:", type="password")
+            col1, col2 = st.columns([3, 1])
 
-        if st.button("Generate & Score") and original and openai_key:
-            # Set OpenAI API key
-            openai.api_key = openai_key
-            client = openai.OpenAI(api_key=openai_key)
+            with col1:
+                original = st.text_input(
+                    "Original Headline:",
+                    placeholder="Enter the headline you want to improve...",
+                    help="The headline you want to optimize",
+                )
 
-            detailed_instructions = """
-You are a data-driven news editor. When rewriting the headline, follow these guidelines:
-1. Preserve factual accuracy and key entities.
-2. Improve predicted click-through rate (CTR).
-3. Enhance readability (aim for a Flesch Reading Ease score ≥ 60).
-4. Maintain semantic similarity to the original.
-5. Keep the headline under 70 characters.
-"""
+            with col2:
+                n_variations = st.slider("Variations:", 1, 5, 3)
 
-            prompt = (
-                f"{detailed_instructions}\n"
-                f"Original: {original}\n"
-                f"Rewrites (provide {n} options, each on its own line):"
+            st.subheader("🔑 OpenAI Configuration")
+            openai_key = st.text_input(
+                "OpenAI API Key:",
+                type="password",
+                help="Your OpenAI API key for GPT-4 access",
             )
 
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": detailed_instructions.strip()},
-                        {"role": "user", "content": prompt},
+            # Context settings
+            col1, col2 = st.columns(2)
+            with col1:
+                rewrite_category = st.selectbox(
+                    "Category:",
+                    [
+                        "news",
+                        "sports",
+                        "entertainment",
+                        "finance",
+                        "lifestyle",
+                        "technology",
                     ],
-                    n=1,
-                    temperature=0.7,
                 )
 
-                # Extract and score candidates
-                text = response.choices[0].message.content.strip()
-                candidates = [
-                    line.strip("- ").strip()
-                    for line in text.splitlines()
-                    if line.strip()
-                ][:n]
-
-                # Score original and candidates
-                orig_feats = extract_features_updated(
-                    [original], resources["embedder"], resources["feature_metadata"]
+            with col2:
+                optimization_focus = st.selectbox(
+                    "Optimization Focus:",
+                    [
+                        "Click-through Rate",
+                        "Readability",
+                        "Emotional Appeal",
+                        "Urgency",
+                        "Curiosity",
+                    ],
                 )
-                orig_ctr = resources["ctr_model"].predict(
-                    orig_feats[resources["feature_names"]]
-                )[0]
-                orig_emb = resources["embedder"].encode([original])[0]
 
-                rows = []
-                for cand in candidates:
-                    feats = extract_features_updated(
-                        [cand], resources["embedder"], resources["feature_metadata"]
+            rewrite_btn = st.form_submit_button(
+                "✨ Generate Variations", type="primary"
+            )
+
+        if rewrite_btn and original and openai_key:
+            try:
+                # Set up OpenAI
+                client = openai.OpenAI(api_key=openai_key)
+
+                # Create focused instructions based on optimization focus
+                focus_instructions = {
+                    "Click-through Rate": "Focus on creating headlines that maximize click-through rates with compelling hooks and curiosity gaps.",
+                    "Readability": "Prioritize clarity and easy-to-understand language with high readability scores.",
+                    "Emotional Appeal": "Use emotional triggers and power words that resonate with readers.",
+                    "Urgency": "Create a sense of urgency and timeliness that compels immediate action.",
+                    "Curiosity": "Build curiosity gaps that make readers want to learn more.",
+                }
+
+                detailed_instructions = f"""
+You are an expert news editor optimizing headlines for {rewrite_category} content.
+
+OPTIMIZATION FOCUS: {focus_instructions[optimization_focus]}
+
+Guidelines:
+1. Preserve factual accuracy and key information
+2. Keep headlines under 70 characters for optimal display
+3. Maintain semantic similarity to the original
+4. Use power words and emotional triggers appropriately
+5. Consider the target category: {rewrite_category}
+
+Original headline: {original}
+
+Generate {n_variations} improved variations, each on a separate line:
+"""
+
+                with st.spinner("🤖 Generating optimized headlines..."):
+                    response = client.chat.completions.create(
+                        model="gpt-4",
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are an expert headline optimizer.",
+                            },
+                            {"role": "user", "content": detailed_instructions},
+                        ],
+                        temperature=0.7,
+                        max_tokens=500,
                     )
-                    ctr_pred = resources["ctr_model"].predict(
-                        feats[resources["feature_names"]]
-                    )[0]
-                    read = flesch_reading_ease(cand) if cand.strip() else 0
-                    sim = cosine_sim(orig_emb, resources["embedder"].encode([cand])[0])
-                    rows.append(
-                        {
-                            "Candidate": cand,
-                            "CTR": ctr_pred,
-                            "Readability": read,
-                            "Similarity": sim,
-                        }
+
+                    # Extract candidates
+                    text = response.choices[0].message.content.strip()
+                    candidates = [
+                        line.strip("- ").strip()
+                        for line in text.splitlines()
+                        if line.strip() and not line.startswith("Generate")
+                    ][:n_variations]
+
+                if candidates:
+                    st.markdown("---")
+                    st.subheader("📊 Headline Analysis")
+
+                    # Analyze original headline
+                    current_time = datetime.datetime.now()
+                    orig_ctr = predict_ctr_enhanced(
+                        original, rewrite_category, current_time, "Weekday", resources
                     )
+                    orig_emb = resources["embedder"].encode([original])[0]
 
-                df_res = pd.DataFrame(rows).sort_values("CTR", ascending=False)
-                best_ctr = df_res["CTR"].iloc[0]
-                improvement = best_ctr - orig_ctr
+                    # Analyze all candidates
+                    results = []
+                    for i, candidate in enumerate(candidates, 1):
+                        ctr_pred = predict_ctr_enhanced(
+                            candidate,
+                            rewrite_category,
+                            current_time,
+                            "Weekday",
+                            resources,
+                        )
+                        readability = (
+                            flesch_reading_ease(candidate) if candidate.strip() else 0
+                        )
+                        similarity = cosine_sim(
+                            orig_emb, resources["embedder"].encode([candidate])[0]
+                        )
 
-                # Display results
-                st.metric("Original CTR", f"{orig_ctr:.1%}")
-                st.metric(
-                    "Best Variation CTR", f"{best_ctr:.1%}", delta=f"{improvement:.1%}"
-                )
+                        results.append(
+                            {
+                                "Rank": i,
+                                "Headline": candidate,
+                                "CTR": ctr_pred,
+                                "CTR_Display": f"{ctr_pred:.2%}",
+                                "Readability": f"{readability:.1f}",
+                                "Similarity": f"{similarity:.2f}",
+                                "Length": len(candidate),
+                                "Improvement": f"{((ctr_pred - orig_ctr) / orig_ctr * 100):+.1f}%",
+                            }
+                        )
 
-                # Format and display table
-                df_res["CTR"] = df_res["CTR"].map(lambda v: f"{v:.1%}")
-                df_res["Readability"] = df_res["Readability"].map(lambda v: f"{v:.1f}")
-                df_res["Similarity"] = df_res["Similarity"].map(lambda v: f"{v:.2f}")
-                st.table(df_res.reset_index(drop=True))
+                    # Sort by CTR
+                    results.sort(key=lambda x: x["CTR"], reverse=True)
 
-                # Display usage info
-                st.info(f"OpenAI tokens used: {response.usage.total_tokens}")
+                    # Display original vs best
+                    best_ctr = results[0]["CTR"]
+                    improvement = ((best_ctr - orig_ctr) / orig_ctr) * 100
+
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("📄 Original CTR", f"{orig_ctr:.2%}")
+                    with col2:
+                        st.metric("🚀 Best Variation CTR", f"{best_ctr:.2%}")
+                    with col3:
+                        st.metric(
+                            "📈 Improvement",
+                            f"{improvement:+.1f}%",
+                            delta=f"{improvement:+.1f}%",
+                        )
+
+                    # Display results table
+                    st.subheader("🏆 Ranked Headlines")
+
+                    display_df = pd.DataFrame(results)[
+                        [
+                            "Rank",
+                            "Headline",
+                            "CTR_Display",
+                            "Readability",
+                            "Similarity",
+                            "Length",
+                            "Improvement",
+                        ]
+                    ]
+                    display_df.columns = [
+                        "Rank",
+                        "Headline",
+                        "CTR",
+                        "Readability",
+                        "Similarity",
+                        "Length",
+                        "vs Original",
+                    ]
+
+                    # Color code the best result
+                    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+                    # Show usage info
+                    st.info(f"💰 OpenAI tokens used: {response.usage.total_tokens}")
+
+                    # Best headline recommendation
+                    st.markdown("---")
+                    st.subheader("🎯 Recommendation")
+                    best_headline = results[0]
+                    st.success(
+                        f"**Best Performing Headline:** {best_headline['Headline']}"
+                    )
+                    st.markdown(
+                        f"**Expected Performance:** {best_headline['CTR_Display']} CTR ({best_headline['Improvement']} improvement)"
+                    )
 
             except Exception as e:
-                st.error(f"Error calling OpenAI API: {str(e)}")
+                st.error(f"❌ Error generating headlines: {str(e)}")
 
-# Sidebar with additional info
-with st.sidebar:
-    st.header("📊 Pipeline Status")
-    for stage, completed in resources["status"].items():
-        status_icon = "✅" if completed else "❌"
-        st.write(f"{status_icon} {stage.replace('_', ' ').title()}")
+with tab4:
+    st.header("📊 Model Analytics")
+    st.markdown("Performance insights and model information")
 
-    if resources["status"]["training_completed"] and "performance" in resources:
-        st.header("📈 Model Performance")
-        perf = resources["performance"]
-        st.metric("Test RMSE", f"{perf.get('test_rmse', 'N/A'):.4f}")
-        st.metric("Test MAE", f"{perf.get('test_mae', 'N/A'):.4f}")
+    # Model information
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("🤖 Model Information")
+        st.markdown(
+            f"**Model Type:** {resources['model_type'].title() if resources['model_type'] else 'Unknown'}"
+        )
+        st.markdown(
+            f"**Features Used:** {len(resources['feature_names']) if resources['feature_names'] else 'Unknown'}"
+        )
+        st.markdown(f"**Training Samples:** {len(resources['train_targets']):,}")
+
+        # Feature importance (if available)
+        if hasattr(resources["ctr_model"], "feature_importances_"):
+            st.subheader("🎯 Top Features")
+            importances = resources["ctr_model"].feature_importances_
+            feature_importance = (
+                pd.DataFrame(
+                    {
+                        "Feature": resources["feature_names"][: len(importances)],
+                        "Importance": importances,
+                    }
+                )
+                .sort_values("Importance", ascending=False)
+                .head(10)
+            )
+
+            st.bar_chart(feature_importance.set_index("Feature")["Importance"])
+
+    with col2:
+        st.subheader("📈 Dataset Statistics")
+
+        # CTR distribution
+        ctr_data = resources["train_targets"]["ctr"]
+
+        st.markdown
