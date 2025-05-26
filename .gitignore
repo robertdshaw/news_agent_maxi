@@ -5,3 +5,5 @@
 /images/*
 /.env/*
 /.config/*
+/.emergency_save/*
+/.preprocess_EDA_fe/*
