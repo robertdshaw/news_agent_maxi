@@ -216,11 +216,14 @@ def extract_features_updated(titles, embedder, feature_metadata):
                 sum(c.isupper() for c in title) / len(title) if title else 0
             ),
             "starts_with_caps": int(title[0].isupper() if title else False),
-            # Temporal features (defaults)
+            # Temporal features (match your EDA pipeline exactly)
             "hour": 12,
             "day_of_week": 1,
             "is_weekend": 0,
-            "time_of_day": 1,
+            "time_of_day_morning": 0,
+            "time_of_day_afternoon": 1,  # Default to afternoon
+            "time_of_day_evening": 0,
+            "time_of_day_night": 0,
             # Category (default)
             "category_enc": 0,
         }
@@ -380,26 +383,32 @@ with tab2:
                 feats = extract_features_updated(
                     [headline], resources["embedder"], resources["feature_metadata"]
                 )
-                pred = resources["ctr_model"].predict(
+                pred_proba = resources["ctr_model"].predict_proba(
                     feats[resources["feature_names"]]
-                )[0]
-                st.metric("Predicted CTR", f"{pred:.1%}")
+                )[0][1]
+                st.metric("Click Probability", f"{pred_proba:.1%}")
 
         with col_ref:
             st.markdown("**🔎 Reference Statistics**")
 
             # Calculate stats from training data
-            train_ctr_mean = resources["train_targets"]["ctr"].mean()
-            train_ctr_with_impressions = resources["train_targets"][
-                resources["train_targets"]["ctr"] > 0
-            ]["ctr"]
+            # Change CTR statistics to click rate statistics:
+            train_click_rate = (resources["train_targets"]["ctr"] > 0).mean()
+            st.metric("Overall Click Rate", f"{train_click_rate:.1%}")
 
-            st.metric("Overall Mean CTR", f"{train_ctr_mean:.2%}")
-            if len(train_ctr_with_impressions) > 0:
-                st.metric(
-                    "Mean CTR (with impressions)",
-                    f"{train_ctr_with_impressions.mean():.2%}",
-                )
+            # Additional useful stats for binary classification
+            total_articles = len(resources["train_targets"])
+            clicked_articles = (resources["train_targets"]["ctr"] > 0).sum()
+
+            st.metric("Articles with Clicks", f"{clicked_articles:,}")
+            st.metric("Total Articles", f"{total_articles:,}")
+
+            # Performance benchmark
+            if clicked_articles > 0:
+                avg_ctr_when_clicked = resources["train_targets"][
+                    resources["train_targets"]["ctr"] > 0
+                ]["ctr"].mean()
+                st.metric("Avg CTR (when clicked)", f"{avg_ctr_when_clicked:.2%}")
 
 with tab3:
     st.header("✍️ Headline Rewriting")
@@ -409,7 +418,6 @@ with tab3:
     else:
         original = st.text_input("Original Headline:", "")
         n = st.slider("Variations to Create:", 1, 5, 3)
-
         # OpenAI API key input
         openai_key = st.text_input("OpenAI API Key:", type="password")
 

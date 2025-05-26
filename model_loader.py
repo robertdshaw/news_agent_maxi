@@ -41,7 +41,7 @@ def load_ctr_model(model_path=None):
         if "performance" in model_data:
             perf = model_data["performance"]
             logging.info(
-                f"Model performance - Test RMSE: {perf.get('test_rmse', 'N/A'):.4f}"
+                f"Model performance - Test AUC: {perf.get('test_auc', 'N/A'):.4f}"
             )
 
         return model_data, None
