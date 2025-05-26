@@ -33,7 +33,7 @@ def get_model_paths():
         "faiss_index": data_dir.parent / "faiss_index.idx",
         "embedding_metadata": data_dir.parent / "embedding_metadata.pkl",
         # Model artifacts
-        "ctr_model": model_dir / "ctr_regressor_1.pkl",
+        "ctr_model": model_dir / "ctr_regressor.pkl",
         "feature_metadata": data_dir / "feature_metadata.json",
         "label_encoder": data_dir / "label_encoder.json",
         "editorial_guidelines": data_dir / "editorial_guidelines.json",
