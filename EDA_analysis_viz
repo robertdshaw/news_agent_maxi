@@ -1,0 +1,265 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from pathlib import Path
+
+# Set matplotlib to non-interactive backend
+plt.ioff()  # Turn off interactive mode
+plt.style.use("default")
+
+print("Creating EDA visualizations from existing processed data...")
+
+# Paths
+PREP_DIR = Path("data/preprocessed")
+plots_dir = PREP_DIR / "plots"
+plots_dir.mkdir(parents=True, exist_ok=True)
+
+print(f"Saving plots to: {plots_dir.absolute()}")
+
+# Load your existing processed data (with interaction terms)
+X_train = pd.read_parquet(PREP_DIR / "processed_data" / "X_train.parquet")
+y_train = pd.read_parquet(PREP_DIR / "processed_data" / "y_train.parquet")["ctr"]
+
+print(f"Loaded data: Train {len(X_train)} articles, {len(X_train.columns)} features")
+
+# Combine train data for analysis
+df_analysis = X_train.copy()
+df_analysis["ctr"] = y_train
+
+# Bivariate analysis
+correlations = df_analysis.corr()["ctr"].drop("ctr").sort_values(ascending=False)
+print("Top correlations with CTR:")
+print(correlations.head(15))
+
+# Get top correlated features (excluding embeddings for visualization)
+non_emb_features = [
+    col for col in df_analysis.columns if not col.startswith("emb_") and col != "ctr"
+]
+non_emb_correlations = (
+    df_analysis[non_emb_features + ["ctr"]]
+    .corr()["ctr"]
+    .drop("ctr")
+    .sort_values(ascending=False)
+)
+top_corr_features = (
+    non_emb_correlations.abs().sort_values(ascending=False).head(10).index.tolist()
+)
+
+print(f"\nTop non-embedding features for visualization:")
+print(non_emb_correlations.head(10))
+
+# 1. Correlation matrix heatmap
+print("Creating correlation heatmap...")
+plt.figure(figsize=(12, 10))
+feature_corr_matrix = df_analysis[top_corr_features + ["ctr"]].corr()
+sns.heatmap(feature_corr_matrix, annot=True, cmap="coolwarm", center=0, fmt=".3f")
+plt.title("Feature Correlation Matrix (Top 10 Non-Embedding Features + CTR)")
+plt.tight_layout()
+plot_path = plots_dir / "correlation_heatmap.png"
+plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+plt.close()
+print(f"Saved: {plot_path}")
+
+# 2. Bivariate scatter plots for top features
+print("Creating bivariate analysis...")
+fig, axes = plt.subplots(3, 2, figsize=(15, 12))
+axes = axes.flatten()
+
+for i, feature in enumerate(top_corr_features[:6]):
+    axes[i].scatter(df_analysis[feature], df_analysis["ctr"], alpha=0.3, s=1)
+    axes[i].set_xlabel(feature)
+    axes[i].set_ylabel("CTR")
+    axes[i].set_title(f"{feature} vs CTR (r={non_emb_correlations[feature]:.3f})")
+
+    # Add trend line
+    z = np.polyfit(df_analysis[feature], df_analysis["ctr"], 1)
+    p = np.poly1d(z)
+    axes[i].plot(df_analysis[feature], p(df_analysis[feature]), "r--", alpha=0.8)
+
+plt.tight_layout()
+plot_path = plots_dir / "bivariate_analysis.png"
+plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+plt.close()
+print(f"Saved: {plot_path}")
+
+# 3. CTR distribution and breakdowns
+print("Creating CTR analysis...")
+fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+
+# CTR histogram
+axes[0, 0].hist(df_analysis["ctr"], bins=50, alpha=0.7, edgecolor="black")
+axes[0, 0].set_title("CTR Distribution")
+axes[0, 0].set_xlabel("CTR")
+axes[0, 0].set_ylabel("Frequency")
+axes[0, 0].axvline(
+    df_analysis["ctr"].median(),
+    color="red",
+    linestyle="--",
+    label=f'Median: {df_analysis["ctr"].median():.4f}',
+)
+axes[0, 0].legend()
+
+# CTR by category (if available)
+if "category_enc" in df_analysis.columns:
+    category_ctr = (
+        df_analysis.groupby("category_enc")["ctr"].mean().sort_values(ascending=False)
+    )
+    axes[0, 1].bar(range(len(category_ctr)), category_ctr.values)
+    axes[0, 1].set_title("Average CTR by Category")
+    axes[0, 1].set_xlabel("Category (encoded)")
+    axes[0, 1].set_ylabel("Average CTR")
+
+# CTR by hour (if available)
+if "hour" in df_analysis.columns:
+    hourly_ctr = df_analysis.groupby("hour")["ctr"].mean()
+    axes[1, 0].plot(hourly_ctr.index, hourly_ctr.values, marker="o", linewidth=2)
+    axes[1, 0].set_title("Average CTR by Hour")
+    axes[1, 0].set_xlabel("Hour of Day")
+    axes[1, 0].set_ylabel("Average CTR")
+    axes[1, 0].grid(True, alpha=0.3)
+
+# Feature importance
+top_15_features = non_emb_correlations.abs().head(15)
+colors = [
+    "red" if non_emb_correlations[feat] < 0 else "blue"
+    for feat in top_15_features.index
+]
+axes[1, 1].barh(
+    range(len(top_15_features)),
+    non_emb_correlations[top_15_features.index],
+    color=colors,
+    alpha=0.7,
+)
+axes[1, 1].set_yticks(range(len(top_15_features)))
+axes[1, 1].set_yticklabels(top_15_features.index)
+axes[1, 1].set_xlabel("Correlation with CTR")
+axes[1, 1].set_title("Top 15 Feature Correlations")
+axes[1, 1].axvline(x=0, color="black", linestyle="-", alpha=0.3)
+
+plt.tight_layout()
+plot_path = plots_dir / "ctr_analysis.png"
+plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+plt.close()
+print(f"Saved: {plot_path}")
+
+# 4. Pair plot of most correlated features (sample for speed)
+print("Creating pair plot (sampling for speed)...")
+top_5_features = top_corr_features[:5] + ["ctr"]
+sample_size = min(3000, len(df_analysis))
+sample_data = df_analysis[top_5_features].sample(n=sample_size, random_state=42)
+
+sns.pairplot(sample_data, diag_kind="hist", plot_kws={"alpha": 0.6, "s": 1})
+plt.suptitle(f"Pair Plot of Top 5 Features (Sample of {sample_size} articles)", y=1.02)
+plot_path = plots_dir / "pairplot.png"
+plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+plt.close()
+print(f"Saved: {plot_path}")
+
+# 5. Text and interaction feature analysis
+print("Creating feature analysis...")
+fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+
+# Title length vs CTR
+if "title_length" in df_analysis.columns:
+    axes[0, 0].scatter(df_analysis["title_length"], df_analysis["ctr"], alpha=0.3, s=1)
+    axes[0, 0].set_xlabel("Title Length")
+    axes[0, 0].set_ylabel("CTR")
+    axes[0, 0].set_title("Title Length vs CTR")
+
+# Interaction terms (if they exist)
+interaction_features = [col for col in df_analysis.columns if "_x_" in col]
+if interaction_features:
+    print(f"Found {len(interaction_features)} interaction features")
+
+    # Plot top interaction feature
+    top_interaction = interaction_features[0]
+    axes[0, 1].scatter(df_analysis[top_interaction], df_analysis["ctr"], alpha=0.3, s=1)
+    axes[0, 1].set_xlabel(top_interaction)
+    axes[0, 1].set_ylabel("CTR")
+    axes[0, 1].set_title(f"{top_interaction} vs CTR")
+
+    # Interaction feature correlations
+    interaction_corrs = (
+        df_analysis[interaction_features + ["ctr"]]
+        .corr()["ctr"]
+        .drop("ctr")
+        .sort_values(ascending=False)
+    )
+    axes[1, 0].barh(range(len(interaction_corrs)), interaction_corrs.values)
+    axes[1, 0].set_yticks(range(len(interaction_corrs)))
+    axes[1, 0].set_yticklabels(interaction_corrs.index)
+    axes[1, 0].set_xlabel("Correlation with CTR")
+    axes[1, 0].set_title("Interaction Feature Correlations")
+
+    print("Top interaction feature correlations:")
+    print(interaction_corrs)
+
+# Punctuation features analysis
+punct_features = [col for col in df_analysis.columns if col.startswith("has_")]
+if punct_features:
+    punct_effects = []
+    for feat in punct_features:
+        with_feat = df_analysis[df_analysis[feat] == 1]["ctr"].mean()
+        without_feat = df_analysis[df_analysis[feat] == 0]["ctr"].mean()
+        punct_effects.append(with_feat - without_feat)
+
+    axes[1, 1].bar(range(len(punct_features)), punct_effects)
+    axes[1, 1].set_xticks(range(len(punct_features)))
+    axes[1, 1].set_xticklabels(
+        [f.replace("has_", "") for f in punct_features], rotation=45
+    )
+    axes[1, 1].set_ylabel("CTR Difference")
+    axes[1, 1].set_title("CTR Boost from Text Features")
+    axes[1, 1].axhline(y=0, color="red", linestyle="--", alpha=0.5)
+
+plt.tight_layout()
+plot_path = plots_dir / "feature_analysis.png"
+plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+plt.close()
+print(f"Saved: {plot_path}")
+
+# 6. Summary statistics
+summary_stats = pd.DataFrame(
+    {
+        "Feature": top_corr_features,
+        "Correlation": non_emb_correlations[top_corr_features].values,
+        "Mean": [df_analysis[feat].mean() for feat in top_corr_features],
+        "Std": [df_analysis[feat].std() for feat in top_corr_features],
+        "Min": [df_analysis[feat].min() for feat in top_corr_features],
+        "Max": [df_analysis[feat].max() for feat in top_corr_features],
+    }
+).round(4)
+
+print("\nTop 10 Feature Summary:")
+print(summary_stats.to_string(index=False))
+
+# Save summary
+summary_stats.to_csv(PREP_DIR / "processed_data" / "feature_summary.csv", index=False)
+
+# Final correlation summary
+print(f"\nFinal Analysis Summary:")
+print(f"- Total features: {len(X_train.columns)}")
+print(
+    f"- Embedding features: {len([col for col in X_train.columns if col.startswith('emb_')])}"
+)
+print(f"- Interaction features: {len(interaction_features)}")
+print(f"- Strongest correlation: {correlations.iloc[0]:.4f} ({correlations.index[0]})")
+print(f"- Median CTR: {y_train.median():.4f}")
+print(f"- Mean CTR: {y_train.mean():.4f}")
+
+print(f"\nPlots saved to {plots_dir.absolute()}:")
+print("- correlation_heatmap.png")
+print("- bivariate_analysis.png")
+print("- ctr_analysis.png")
+print("- pairplot.png")
+print("- feature_analysis.png")
+
+print("\nEDA visualizations complete!")
+
+# List all created files
+created_files = list(plots_dir.glob("*.png"))
+print(f"\nConfirming {len(created_files)} plot files were created:")
+for plot_file in created_files:
+    size_kb = plot_file.stat().st_size / 1024
+    print(f"  {plot_file.name} ({size_kb:.1f} KB)")
