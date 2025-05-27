@@ -11,6 +11,8 @@
 /.df_train_progress.parquet/*
 /.df_test_progress.parquet/*
 /.df_val_progress.parquet/*
-/.upworthy-archive-exploratory-packages-03.12.2020.csv/*
 /."*.pkl"/*
 /.EDA_3.ipynb/*
+/.emergency_save/*
+/.upworthy_data/*
+/.model_output/*
