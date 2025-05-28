@@ -190,7 +190,7 @@ def create_article_features_exact(title, abstract="", category="news", component
         features["abstract_length"] + 1
     )
 
-    # ========== STEP 6: Editorial scores (exact replication) ==========
+    # ========== STEP 6: Editorial scores  ==========
     features["editorial_readability_score"] = (
         np.clip(features["title_reading_ease"] / 100, 0, 1)
         * EDITORIAL_CRITERIA["readability_weight"]
@@ -201,11 +201,7 @@ def create_article_features_exact(title, abstract="", category="news", component
         * EDITORIAL_CRITERIA["headline_quality_weight"]
     )
 
-    # ========== STEP 7: CTR gain potential - REMOVED (DATA LEAKAGE) ==========
-    # NOTE: ctr_gain_potential and below_median_ctr are NOT included in model features
-    # to prevent data leakage (they depend on historical performance not available at publication)
-
-    # ========== STEP 7: Editorial quality flags (exact replication) ==========
+    # ========== STEP 7: Editorial quality flags  ==========
     features["needs_readability_improvement"] = (
         1
         if features["title_reading_ease"] < EDITORIAL_CRITERIA["target_reading_ease"]
@@ -224,11 +220,10 @@ def create_article_features_exact(title, abstract="", category="news", component
         1 if features["title_length"] > EDITORIAL_CRITERIA["max_title_length"] else 0
     )
 
-    # ========== STEP 8: Category encoding (exact replication) ==========
+    # ========== STEP 8: Category encoding ==========
     if components and components["category_encoder"] is not None:
         try:
             category_encoder = components["category_encoder"]
-            # Clean category the same way as in EDA preprocessing
             category_clean = (
                 str(category).replace("nan", "unknown")
                 if pd.notna(category)
@@ -240,7 +235,6 @@ def create_article_features_exact(title, abstract="", category="news", component
                     0
                 ]
             else:
-                # Use "unknown" if available, otherwise use 0
                 features["category_enc"] = (
                     category_encoder.transform(["unknown"])[0]
                     if "unknown" in category_encoder.classes_
@@ -252,7 +246,7 @@ def create_article_features_exact(title, abstract="", category="news", component
     else:
         features["category_enc"] = 0
 
-    # ========== STEP 9: Create title embeddings (exact replication) ==========
+    # ========== STEP 9: Create title embeddings ==========
     try:
         embedder = load_embedder()
         title_embedding = embedder.encode([title])[0]
@@ -348,52 +342,52 @@ def main():
     preprocessing_components = load_preprocessing_components()
 
     # Header
-    st.title("📰 Article Engagement Predictor & AI Rewriter")
+    st.title("📰 AI-Assisted Headline Analysis & Search")
     st.markdown(
         "**Predict engagement and optimize headlines with AI-powered rewriting**"
     )
 
-    # Sidebar
-    st.sidebar.header("🎯 System Status")
-    if model_pipeline:
-        st.sidebar.success(f"✅ Model: {model_pipeline['model_name']}")
-        if "auc" in model_pipeline.get("performance", {}):
-            st.sidebar.info(f"📊 AUC: {model_pipeline['performance']['auc']:.4f}")
-    else:
-        st.sidebar.error("❌ Model not loaded")
+    # # Sidebar
+    # st.sidebar.header("🎯 System Status")
+    # if model_pipeline:
+    #     st.sidebar.success(f"✅ Model: {model_pipeline['model_name']}")
+    #     if "auc" in model_pipeline.get("performance", {}):
+    #         st.sidebar.info(f"📊 AUC: {model_pipeline['performance']['auc']:.4f}")
+    # else:
+    #     st.sidebar.error("❌ Model not loaded")
 
-    if preprocessing_components:
-        st.sidebar.success("✅ Preprocessing: Components loaded")
-        st.sidebar.info(
-            f"📈 Features: {len(preprocessing_components['feature_order'])}"
-        )
-        st.sidebar.info("🛡️ Data leakage prevention: ON")
-    else:
-        st.sidebar.error("❌ Preprocessing components not loaded")
+    # if preprocessing_components:
+    #     st.sidebar.success("✅ Preprocessing: Components loaded")
+    #     st.sidebar.info(
+    #         f"📈 Features: {len(preprocessing_components['feature_order'])}"
+    #     )
+    #     st.sidebar.info("🛡️ Data leakage prevention: ON")
+    # else:
+    #     st.sidebar.error("❌ Preprocessing components not loaded")
 
-    if search_system:
-        st.sidebar.success(
-            f"✅ Search: {search_system['metadata']['total_articles']:,} articles"
-        )
-        if search_system["metadata"].get("rewrite_variants", 0) > 0:
-            st.sidebar.info(
-                f"🔄 Rewrites: {search_system['metadata']['rewrite_variants']} variants"
-            )
-    else:
-        st.sidebar.error("❌ Search system not loaded")
+    # if search_system:
+    #     st.sidebar.success(
+    #         f"✅ Search: {search_system['metadata']['total_articles']:,} articles"
+    #     )
+    #     if search_system["metadata"].get("rewrite_variants", 0) > 0:
+    #         st.sidebar.info(
+    #             f"🔄 Rewrites: {search_system['metadata']['rewrite_variants']} variants"
+    #         )
+    # else:
+    #     st.sidebar.error("❌ Search system not loaded")
 
-    if llm_rewriter.api_available:
-        st.sidebar.success("✅ AI Rewriter: Available")
-    else:
-        st.sidebar.warning("⚠️ AI Rewriter: Offline mode")
+    # if llm_rewriter.api_available:
+    #     st.sidebar.success("✅ AI Rewriter: Available")
+    # else:
+    #     st.sidebar.warning("⚠️ AI Rewriter: Offline mode")
 
     # Main tabs
-    tab1, tab2, tab3, tab4 = st.tabs(
+    tab1, tab2, tab3 = st.tabs(
         [
             "🔮 Predict & Rewrite",
             "🔍 Search Articles",
-            "📊 Rewrite Analysis",
-            "🏆 Top Articles",
+            "📊 Headline Rewrite Analysis",
+            # "🏆 Top Articles",
         ]
     )
 
@@ -620,23 +614,23 @@ def main():
             st.write("• Front-load key information")
             st.write("• Under 75 characters")
 
-            st.subheader("📝 Examples")
-            st.write("**High Engagement:**")
-            st.code("5 Ways AI Will Transform Healthcare")
-            st.code("Why Tesla Stock Dropped 15% Today")
+            # st.subheader("📝 Examples")
+            # st.write("**High Engagement:**")
+            # st.code("5 Ways AI Will Transform Healthcare")
+            # st.code("Why Tesla Stock Dropped 15% Today")
 
-            st.write("**Low Engagement:**")
-            st.code("Technology Report Published")
-            st.code("General Business Update Information")
+            # st.write("**Low Engagement:**")
+            # st.code("Technology Report Published")
+            # st.code("General Business Update Information")
 
     # Tab 2: Search Articles
     with tab2:
-        st.header("Search Articles & Rewrite Variants")
+        st.header("Search Articles")
 
         search_query = st.text_input(
             "Search Query",
             placeholder="Enter keywords or describe the topic...",
-            help="Search through articles and their rewrite variants",
+            help="Search through articles by keywords, title, or content.",
         )
 
         col_search1, col_search2 = st.columns(2)
@@ -644,8 +638,8 @@ def main():
         with col_search1:
             num_results = st.slider("Number of results", 5, 20, 10)
 
-        with col_search2:
-            include_rewrites = st.checkbox("Include rewrite variants", value=True)
+        # with col_search2:
+        #     include_rewrites = st.checkbox("Include rewrite variants", value=True)
 
         if st.button("🔍 Search", type="primary"):
             if search_query.strip():
@@ -656,7 +650,7 @@ def main():
                     query_embedding = query_embedding.astype(np.float32)
                     faiss.normalize_L2(query_embedding)
 
-                    search_k = num_results * 3 if include_rewrites else num_results
+                    search_k = num_results * 3
                     distances, indices = search_system["index"].search(
                         query_embedding, search_k
                     )
@@ -671,14 +665,16 @@ def main():
                                 article_info = search_system["article_lookup"][
                                     article_id
                                 ].copy()
-                                article_info["similarity_score"] = float(dist)
-                                article_info["newsID"] = article_id
 
-                                if (
-                                    not include_rewrites
-                                    and article_info.get("dataset") == "rewrite_variant"
-                                ):
-                                    continue
+                                l2_distance = float(dist)
+                                similarity_score = 1.0 / (1.0 + l2_distance)
+                                article_info["similarity_score"] = similarity_score
+
+                                # if (
+                                #     not include_rewrites
+                                #     and article_info.get("dataset") == "rewrite_variant"
+                                # ):
+                                #     continue
 
                                 results.append(article_info)
 
@@ -686,8 +682,20 @@ def main():
                                     break
 
                 if results:
-                    st.subheader(f"📰 Found {len(results)} articles")
+                    displayed_titles = set()
+                    unique_title_results = []
+                    for article_info in results:
+                        title_to_check = article_info.get("title", "")
+                        if title_to_check not in displayed_titles:
+                            unique_title_results.append(article_info)
+                            displayed_titles.add(title_to_check)
+                        if (
+                            len(unique_title_results) >= num_results
+                        ):  # Ensure we still respect user's request for num_results
+                            break
+                    results_to_display = unique_title_results
 
+                    st.subheader(f"📰 Found {len(results)} articles")
                     for i, article in enumerate(results, 1):
                         with st.expander(f"{i}. {article['title'][:70]}..."):
                             col_art1, col_art2 = st.columns([3, 1])
@@ -707,15 +715,15 @@ def main():
                                     "Similarity", f"{article['similarity_score']:.3f}"
                                 )
                                 st.write(f"**Category:** {article['category']}")
-                                st.write(f"**Dataset:** {article['dataset']}")
+                                # st.write(f"**Dataset:** {article['dataset']}")
 
-                                if article.get("dataset") == "rewrite_variant":
-                                    st.write(
-                                        f"**Strategy:** {article.get('rewrite_strategy', 'N/A')}"
-                                    )
-                                    st.write(
-                                        f"**Quality:** {article.get('quality_score', 'N/A')}"
-                                    )
+                                # if article.get("dataset") == "rewrite_variant":
+                                #     st.write(
+                                #         f"**Strategy:** {article.get('rewrite_strategy', 'N/A')}"
+                                #     )
+                                #     st.write(
+                                #         f"**Quality:** {article.get('quality_score', 'N/A')}"
+                                #     )
 
                                 if not pd.isna(article.get("ctr")):
                                     st.write(f"**CTR:** {article['ctr']:.4f}")
@@ -739,27 +747,27 @@ def main():
         if search_system and search_system["metadata"].get("rewrite_analysis"):
             rewrite_stats = search_system["metadata"]["rewrite_analysis"]
 
-            st.subheader("📊 Rewrite Performance Summary")
+            # st.subheader("📊 Rewrite Performance Summary")
 
             col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
 
-            with col_stat1:
-                st.metric(
-                    "Headlines Analyzed", rewrite_stats.get("unique_originals", 0)
-                )
+            # with col_stat1:
+            #     st.metric(
+            #         "Headlines Analyzed", rewrite_stats.get("unique_originals", 0)
+            #     )
 
-            with col_stat2:
-                st.metric("Variants Generated", rewrite_stats.get("total_rewrites", 0))
+            # with col_stat2:
+            #     st.metric("Variants Generated", rewrite_stats.get("total_rewrites", 0))
 
-            with col_stat3:
-                st.metric(
-                    "Best Strategy",
-                    rewrite_stats.get("best_performing_strategy_by_model", "N/A"),
-                )
+            # with col_stat3:
+            #     st.metric(
+            #         "Best Strategy",
+            #         rewrite_stats.get("best_performing_strategy_by_model", "N/A"),
+            #     )
 
-            with col_stat4:
-                model_used = rewrite_stats.get("model_based_ctr_used", False)
-                st.metric("Model CTR", "✅ Yes" if model_used else "❌ No")
+            # with col_stat4:
+            #     model_used = rewrite_stats.get("model_based_ctr_used", False)
+            #     st.metric("Model CTR", "✅ Yes" if model_used else "❌ No")
 
             # Load detailed rewrite results if available
             rewrite_file = FAISS_DIR / "rewrite_analysis" / "headline_rewrites.parquet"
@@ -852,97 +860,97 @@ def main():
                 "No rewrite analysis available. The system may be running in offline mode."
             )
 
-    # Tab 4: Top Articles
-    with tab4:
-        st.header("Top Performing Articles")
+    # # Tab 3: Top Articles
+    # with tab3:
+    #     st.header("Top Performing Articles")
 
-        if search_system:
-            # Get high engagement articles
-            high_engagement_articles = []
-            for newsid, info in search_system["article_lookup"].items():
-                if (
-                    pd.notna(info.get("high_engagement"))
-                    and info["high_engagement"] == 1
-                ):
-                    high_engagement_articles.append(
-                        {
-                            "newsID": newsid,
-                            "title": info["title"],
-                            "category": info["category"],
-                            "ctr": info.get("ctr", 0),
-                            "dataset": info["dataset"],
-                            "abstract": info.get("abstract", ""),
-                        }
-                    )
+    #     if search_system:
+    #         # Get high engagement articles
+    #         high_engagement_articles = []
+    #         for newsid, info in search_system["article_lookup"].items():
+    #             if (
+    #                 pd.notna(info.get("high_engagement"))
+    #                 and info["high_engagement"] == 1
+    #             ):
+    #                 high_engagement_articles.append(
+    #                     {
+    #                         "newsID": newsid,
+    #                         "title": info["title"],
+    #                         "category": info["category"],
+    #                         "ctr": info.get("ctr", 0),
+    #                         # "dataset": info["dataset"],
+    #                         "abstract": info.get("abstract", ""),
+    #                     }
+    #                 )
 
-            high_engagement_articles.sort(key=lambda x: x["ctr"], reverse=True)
+    #         high_engagement_articles.sort(key=lambda x: x["ctr"], reverse=True)
 
-            if high_engagement_articles:
-                st.subheader(
-                    f"🏆 Top {min(20, len(high_engagement_articles))} High-Engagement Articles"
-                )
+    #         if high_engagement_articles:
+    #             st.subheader(
+    #                 f"🏆 Top {min(20, len(high_engagement_articles))} High-Engagement Articles"
+    #             )
 
-                # Filter options
-                col_filter1, col_filter2 = st.columns(2)
+    #             # Filter options
+    #             col_filter1, col_filter2 = st.columns(2)
 
-                with col_filter1:
-                    available_categories = sorted(
-                        list(set(art["category"] for art in high_engagement_articles))
-                    )
-                    selected_categories = st.multiselect(
-                        "Filter by Category", options=available_categories, default=[]
-                    )
+    #             with col_filter1:
+    #                 available_categories = sorted(
+    #                     list(set(art["category"] for art in high_engagement_articles))
+    #                 )
+    #                 selected_categories = st.multiselect(
+    #                     "Filter by Category", options=available_categories, default=[]
+    #                 )
 
-                with col_filter2:
-                    selected_datasets = st.multiselect(
-                        "Filter by Dataset",
-                        options=["train", "val", "test"],
-                        default=["train", "val"],
-                    )
+    #             # with col_filter2:
+    #             #     selected_datasets = st.multiselect(
+    #             #         "Filter by Dataset",
+    #             #         options=["train", "val", "test"],
+    #             #         default=["train", "val"],
+    #             #     )
 
-                # Apply filters
-                filtered_articles = high_engagement_articles
-                if selected_categories:
-                    filtered_articles = [
-                        art
-                        for art in filtered_articles
-                        if art["category"] in selected_categories
-                    ]
-                if selected_datasets:
-                    filtered_articles = [
-                        art
-                        for art in filtered_articles
-                        if art["dataset"] in selected_datasets
-                    ]
+    #             # Apply filters
+    #             filtered_articles = high_engagement_articles
+    #             if selected_categories:
+    #                 filtered_articles = [
+    #                     art
+    #                     for art in filtered_articles
+    #                     if art["category"] in selected_categories
+    #                 ]
+    #             # if selected_datasets:
+    #             #     filtered_articles = [
+    #             #         art
+    #             #         for art in filtered_articles
+    #             #         if art["dataset"] in selected_datasets
+    #             #     ]
 
-                # Display top articles
-                st.write(f"Showing top {min(20, len(filtered_articles))} articles:")
+    #             # Display top articles
+    #             st.write(f"Showing top {min(20, len(filtered_articles))} articles:")
 
-                for i, article in enumerate(filtered_articles[:20], 1):
-                    with st.expander(f"{i}. [{article['ctr']:.4f}] {article['title']}"):
-                        col_top1, col_top2 = st.columns([3, 1])
+    #             for i, article in enumerate(filtered_articles[:20], 1):
+    #                 with st.expander(f"{i}. [{article['ctr']:.4f}] {article['title']}"):
+    #                     col_top1, col_top2 = st.columns([3, 1])
 
-                        with col_top1:
-                            st.write(f"**Title:** {article['title']}")
-                            if article["abstract"]:
-                                abstract_preview = (
-                                    article["abstract"][:300] + "..."
-                                    if len(article["abstract"]) > 300
-                                    else article["abstract"]
-                                )
-                                st.write(f"**Abstract:** {abstract_preview}")
+    #                     with col_top1:
+    #                         st.write(f"**Title:** {article['title']}")
+    #                         if article["abstract"]:
+    #                             abstract_preview = (
+    #                                 article["abstract"][:300] + "..."
+    #                                 if len(article["abstract"]) > 300
+    #                                 else article["abstract"]
+    #                             )
+    #                             st.write(f"**Abstract:** {abstract_preview}")
 
-                        with col_top2:
-                            st.metric("CTR", f"{article['ctr']:.4f}")
-                            st.write(f"**Category:** {article['category']}")
-                            st.write(f"**Dataset:** {article['dataset']}")
-                            st.write(f"**ID:** {article['newsID']}")
+    #                     with col_top2:
+    #                         st.metric("CTR", f"{article['ctr']:.4f}")
+    #                         st.write(f"**Category:** {article['category']}")
+    #                         # st.write(f"**Dataset:** {article['dataset']}")
+    #                         st.write(f"**ID:** {article['newsID']}")
 
-            else:
-                st.info("No high-engagement articles found in the dataset.")
+    #         else:
+    #             st.info("No high-engagement articles found in the dataset.")
 
-        else:
-            st.error("Top articles not available.")
+    #     else:
+    #         st.error("Top articles not available.")
 
     # Footer
     st.markdown("---")
@@ -950,46 +958,46 @@ def main():
         "**Article Engagement Predictor & AI Rewriter** | Built with Streamlit, XGBoost, and OpenAI"
     )
 
-    # Enhanced sidebar info
-    if model_pipeline:
-        st.sidebar.markdown("---")
-        st.sidebar.header("📋 Model Details")
-        st.sidebar.write(f"**Type:** {model_pipeline['model_name']}")
+    # # Enhanced sidebar info
+    # if model_pipeline:
+    #     st.sidebar.markdown("---")
+    #     st.sidebar.header("📋 Model Details")
+    #     st.sidebar.write(f"**Type:** {model_pipeline['model_name']}")
 
-        if "performance" in model_pipeline:
-            perf = model_pipeline["performance"]
-            if "auc" in perf:
-                st.sidebar.write(f"**AUC:** {perf['auc']:.4f}")
-            if "ctr_gain_achieved" in perf:
-                st.sidebar.write(f"**CTR Gain:** {perf['ctr_gain_achieved']:.4f}")
+    #     if "performance" in model_pipeline:
+    #         perf = model_pipeline["performance"]
+    #         if "auc" in perf:
+    #             st.sidebar.write(f"**AUC:** {perf['auc']:.4f}")
+    #         if "ctr_gain_achieved" in perf:
+    #             st.sidebar.write(f"**CTR Gain:** {perf['ctr_gain_achieved']:.4f}")
 
-    if search_system:
-        st.sidebar.markdown("---")
-        st.sidebar.header("🔍 Search Index")
-        metadata = search_system["metadata"]
-        st.sidebar.write(f"**Articles:** {metadata['total_articles']:,}")
-        if metadata.get("rewrite_variants", 0) > 0:
-            st.sidebar.write(f"**Rewrites:** {metadata['rewrite_variants']:,}")
+    # if search_system:
+    #     st.sidebar.markdown("---")
+    #     st.sidebar.header("🔍 Search Index")
+    #     metadata = search_system["metadata"]
+    #     st.sidebar.write(f"**Articles:** {metadata['total_articles']:,}")
+    #     if metadata.get("rewrite_variants", 0) > 0:
+    #         st.sidebar.write(f"**Rewrites:** {metadata['rewrite_variants']:,}")
 
-        # Show model integration status
-        model_integration = metadata.get("model_integration", {})
-        model_available = model_integration.get("model_available", False)
-        st.sidebar.write(
-            f"**Model Integration:** {'✅ Yes' if model_available else '❌ No'}"
-        )
+    #     # Show model integration status
+    #     model_integration = metadata.get("model_integration", {})
+    #     model_available = model_integration.get("model_available", False)
+    #     st.sidebar.write(
+    #         f"**Model Integration:** {'✅ Yes' if model_available else '❌ No'}"
+    #     )
 
-    if preprocessing_components:
-        st.sidebar.markdown("---")
-        st.sidebar.header("🛡️ Data Integrity")
-        st.sidebar.write("**Leakage Prevention:** Active")
-        st.sidebar.write("**Features:** Publication-time only")
-        excluded_features = (
-            preprocessing_components.get("preprocessing_metadata", {})
-            .get("data_leakage_prevention", {})
-            .get("excluded_features", [])
-        )
-        if excluded_features:
-            st.sidebar.write(f"**Excluded:** {', '.join(excluded_features)}")
+    # if preprocessing_components:
+    #     st.sidebar.markdown("---")
+    #     st.sidebar.header("🛡️ Data Integrity")
+    #     st.sidebar.write("**Leakage Prevention:** Active")
+    #     st.sidebar.write("**Features:** Publication-time only")
+    #     excluded_features = (
+    #         preprocessing_components.get("preprocessing_metadata", {})
+    #         .get("data_leakage_prevention", {})
+    #         .get("excluded_features", [])
+    #     )
+    #     if excluded_features:
+    #         st.sidebar.write(f"**Excluded:** {', '.join(excluded_features)}")
 
 
 if __name__ == "__main__":

@@ -35,10 +35,9 @@ CONFIG = {
     "optuna_trials": 25,
     "cv_folds": 3,
     "random_state": 42,
-    "use_class_weights": False,  # Set to True if using class weights
-    # "scale_pos_weight":   # Used if not using class weights
+    "use_class_weights": False,
     "top_k_values": [10, 50, 100, 500],
-    "ctr_gain_threshold": 0.01,  # Minimum CTR gain to consider model effective
+    "ctr_gain_threshold": 0.01,
 }
 
 # ============================================================================
@@ -78,14 +77,11 @@ except Exception as e:
 # ============================================================================
 print("\nStep 2: Preparing data for XGBoost training...")
 
-# --- SMOTE APPLICATION ---
 print("Applying SMOTE to the training data for balancing...")
 smote = SMOTE(random_state=CONFIG["random_state"])
 
-# Ensure y_train["high_engagement"] is a 1D array for SMOTE
 y_train_labels = y_train["high_engagement"].values.ravel()
 
-# --- KEY CHANGE: Convert X_train to float64 BEFORE applying SMOTE ---
 X_train_float = X_train.astype(np.float64)
 # --------------------------------------------------------------------
 
@@ -93,31 +89,25 @@ X_train_resampled_np, y_train_resampled = smote.fit_resample(
     X_train_float, y_train_labels
 )
 
-# Convert the NumPy array output by SMOTE back to a DataFrame with original column names
-# This ensures X_train_resampled is a DataFrame, which DMatrix can handle well.
+
 X_train_resampled = pd.DataFrame(X_train_resampled_np, columns=X_train.columns)
 
 print(
     f"  Original training shape: X_train {X_train.shape}, y_train_labels_shape {y_train_labels.shape}"
-)  # Corrected y_train_labels shape print
+)
 print(
     f"  Resampled training shape: X_train_resampled {X_train_resampled.shape}, y_train_resampled_labels_shape {y_train_resampled.shape}"
-)  # Corrected y_train_resampled shape print
+)
 unique_classes_resampled, counts_resampled = np.unique(
     y_train_resampled, return_counts=True
 )
 print(
     f"  Class distribution after SMOTE: {dict(zip(unique_classes_resampled, counts_resampled))}"
 )
-# --- END OF SMOTE APPLICATION ---
 
-# Create DMatrices: dtrain now uses resampled data.
-# The 'weight' parameter is removed as SMOTE handles balancing.
 dtrain = xgb.DMatrix(X_train_resampled, label=y_train_resampled)
-dval = xgb.DMatrix(
-    X_val, label=y_val["high_engagement"]
-)  # Validation data is NEVER resampled
-dtest = xgb.DMatrix(X_test)  # Test data is NEVER resampled (assuming X_test is defined)
+dval = xgb.DMatrix(X_val, label=y_val["high_engagement"])
+dtest = xgb.DMatrix(X_test)
 
 print("Data preparation completed")
 
@@ -159,7 +149,6 @@ def objective(trial):
         shuffle=True,
         seed=CONFIG["random_state"],
         verbose_eval=0,
-        # Removed return_trained_models parameter
     )
 
     best_score = cv_results["test-auc-mean"].max()
@@ -230,7 +219,6 @@ def evaluate_model_comprehensive(model, X_val, y_val):
 
     print("  Computing editorial metrics...")
 
-    # Top-K Precision (critical for editorial ranking)
     for k in CONFIG["top_k_values"]:
         if k <= len(y_pred_proba):
             top_k_indices = np.argsort(y_pred_proba)[-k:]
@@ -252,7 +240,6 @@ def evaluate_model_comprehensive(model, X_val, y_val):
     results["ctr_lift"] = ctr_lift
     results["ctr_gain_achieved"] = predicted_high_ctr - baseline_ctr
 
-    # Editorial ranking effectiveness
     ctr_ranking_correlation = np.corrcoef(y_pred_proba, actual_ctr)[0, 1]
     results["ctr_ranking_correlation"] = ctr_ranking_correlation
 
@@ -319,7 +306,6 @@ test_predictions_df = pd.DataFrame(
 test_predictions_df.to_parquet(MODEL_DIR / "test_predictions.parquet")
 
 
-# Helper function (can be defined before model_metadata or inline if preferred)
 def convert_to_json_safe(value):
     if isinstance(value, (np.bool_, bool)):
         return bool(value)
@@ -327,22 +313,17 @@ def convert_to_json_safe(value):
         return int(value)
     if isinstance(value, (np.floating, float)):
         return float(value)
-    if isinstance(value, Path):  # Path objects are not serializable
+    if isinstance(value, Path):
         return str(value)
-    if isinstance(value, datetime):  # datetime objects need isoformat
+    if isinstance(value, datetime):
         return value.isoformat()
-    # Add more type checks if other non-serializable types are found
-    return value  # For strings or other types already serializable
+    return value
 
 
 model_metadata = {
     "model_type": "XGBoost_Optuna_Optimized",
-    "training_timestamp": convert_to_json_safe(
-        datetime.now()
-    ),  # Ensures datetime is handled
-    "best_parameters": {
-        k: convert_to_json_safe(v) for k, v in best_params.items()
-    },  # Ensure standard types from Optuna
+    "training_timestamp": convert_to_json_safe(datetime.now()),
+    "best_parameters": {k: convert_to_json_safe(v) for k, v in best_params.items()},
     "optuna_trials": int(CONFIG["optuna_trials"]),
     "best_auc_score": float(study.best_value),
     "final_evaluation": {
@@ -352,8 +333,8 @@ model_metadata = {
     "training_samples": int(len(X_train)),
     "validation_samples": int(len(X_val)),
     "test_samples": int(len(X_test)),
-    "training_samples_original": int(len(X_train)),  # Original size
-    "training_samples_after_smote": int(len(X_train_resampled)),  # Size after SMOTE
+    "training_samples_original": int(len(X_train)),
+    "training_samples_after_smote": int(len(X_train_resampled)),
     "resampling_method_used": "SMOTE",
     "editorial_criteria_met": {
         "auc_threshold_0.75": bool(evaluation_results.get("auc", 0.0) >= 0.70),
@@ -375,7 +356,6 @@ model_metadata = {
     ],
 }
 
-# The json.dump call remains the same:
 with open(MODEL_DIR / "model_metadata.json", "w") as f:
     json.dump(model_metadata, f, indent=2)
 # ============================================================================
@@ -386,7 +366,6 @@ print("\nStep 8: Creating evaluation plots...")
 plt.style.use("default")
 fig, axes = plt.subplots(2, 2, figsize=(15, 12))
 
-# Plot 1: Feature Importance
 top_features = feature_importance.head(20)
 axes[0, 0].barh(range(len(top_features)), top_features["importance"])
 axes[0, 0].set_yticks(range(len(top_features)))
@@ -395,7 +374,6 @@ axes[0, 0].set_xlabel("Feature Importance")
 axes[0, 0].set_title("Top 20 Feature Importance")
 axes[0, 0].invert_yaxis()
 
-# Plot 2: Optuna Optimization History
 trial_values = [trial.value for trial in study.trials if trial.value is not None]
 axes[0, 1].plot(trial_values)
 axes[0, 1].set_xlabel("Trial")
@@ -403,7 +381,6 @@ axes[0, 1].set_ylabel("AUC Score")
 axes[0, 1].set_title("Optuna Optimization Progress")
 axes[0, 1].grid(True)
 
-# Plot 3: Prediction Distribution
 val_predictions = final_model.predict_proba(X_val)[:, 1]
 axes[1, 0].hist(val_predictions, bins=50, alpha=0.7, edgecolor="black")
 axes[1, 0].set_xlabel("Prediction Probability")
@@ -411,7 +388,6 @@ axes[1, 0].set_ylabel("Frequency")
 axes[1, 0].set_title("Prediction Probability Distribution")
 axes[1, 0].grid(True, alpha=0.3)
 
-# Plot 4: CTR vs Prediction Scatter
 sample_size = min(1000, len(val_predictions))
 sample_idx = np.random.choice(len(val_predictions), sample_size, replace=False)
 axes[1, 1].scatter(
@@ -442,25 +418,19 @@ try:
             :, 1
         ]  # Probabilities for the positive class
 
-        # Calculate precision, recall, and thresholds
         precision, recall, thresholds_pr = precision_recall_curve(
             y_true_val, y_scores_val
         )
 
-        # Calculate Average Precision (AP)
         average_precision = average_precision_score(y_true_val, y_scores_val)
 
-        # Plot the Precision-Recall curve
-        plt.figure(figsize=(8, 6))  # Create a new figure for this plot
+        plt.figure(figsize=(8, 6))
         plt.plot(
             recall,
             precision,
             marker=".",
             label=f"XGBoost (AP = {average_precision:.4f})",
         )
-
-        # Calculate no-skill line (baseline)
-        # Proportion of the positive class in the validation set
         no_skill_baseline = y_true_val.mean()
         plt.plot(
             [0, 1],
@@ -478,7 +448,7 @@ try:
 
         pr_curve_path = MODEL_DIR / "plots" / "precision_recall_curve.png"
         plt.savefig(pr_curve_path, dpi=300, bbox_inches="tight")
-        plt.close()  # Close the figure to free memory
+        plt.close()
         print(f"  Precision-Recall curve saved to: {pr_curve_path}")
     else:
         print(

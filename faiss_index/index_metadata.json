@@ -1,7 +1,7 @@
 {
   "index_type": "IVF",
-  "total_articles": 64093,
-  "original_articles": 64085,
+  "total_articles": 53064,
+  "original_articles": 53056,
   "rewrite_variants": 8,
   "embedding_dim": 384,
   "datasets_included": [
@@ -19,17 +19,17 @@
       "structure",
       "comprehensive"
     ],
-    "average_quality_improvement": 50.625,
-    "average_readability_improvement": -18.06126217532467,
-    "average_predicted_ctr_improvement": 0.0019200049908674574,
-    "average_model_ctr_improvement": 0.0014419909566640854,
+    "average_quality_improvement": 51.25,
+    "average_readability_improvement": -8.610146103896096,
+    "average_predicted_ctr_improvement": 0.001914723740867458,
+    "average_model_ctr_improvement": 0.0017043384723365307,
     "best_performing_strategy_by_model": "structure",
     "best_performing_strategy_by_quality": "engagement",
     "semantic_similarity_maintained": 0.5,
     "model_based_ctr_used": true,
     "positive_model_improvements": 8,
     "negative_model_improvements": 0,
-    "best_model_improvement": 0.002459961920976639
+    "best_model_improvement": 0.0036248378455638885
   },
   "config": {
     "embedding_dim": 384,

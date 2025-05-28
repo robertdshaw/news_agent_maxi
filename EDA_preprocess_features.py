@@ -36,7 +36,6 @@ CONFIG = {
     "pca_components": 150,
 }
 
-# Editorial Criteria for Feature Engineering
 EDITORIAL_CRITERIA = {
     "target_reading_ease": 60,
     "readability_weight": 0.3,
@@ -59,7 +58,6 @@ def load_data_efficiently():
 
     print("Loading news data...")
 
-    # Define column names
     news_columns = [
         "newsID",
         "category",
@@ -73,7 +71,6 @@ def load_data_efficiently():
 
     behaviors_columns = ["impression_id", "user_id", "time", "history", "impressions"]
 
-    # Load news data with optimized dtypes
     news_train = pd.read_csv(
         TRAIN_DIR / "news.tsv",
         sep="\t",
@@ -115,7 +112,6 @@ def load_data_efficiently():
 
     print("Loading behavior data...")
 
-    # Load behavior data with optimized types
     behaviors_train = pd.read_csv(
         TRAIN_DIR / "behaviors.tsv",
         sep="\t",
@@ -200,7 +196,6 @@ def process_impressions_chunked(behaviors_df, is_test=False, chunk_size=50000):
             f"  Processing chunk {chunk_idx + 1}/{total_chunks}: rows {start_idx:,} to {end_idx:,}"
         )
 
-        # Explode impressions for this chunk
         impressions = chunk["impressions"].str.split().explode()
         expanded = pd.DataFrame(
             {
@@ -210,12 +205,10 @@ def process_impressions_chunked(behaviors_df, is_test=False, chunk_size=50000):
         )
 
         if not is_test:
-            # Extract clicks for train/val data
             split = expanded["impression"].str.split("-", expand=True)
             expanded["newsID"] = split[0]
             expanded["clicked"] = split[1].astype("int8")
 
-            # Aggregate by article for this chunk
             chunk_articles = (
                 expanded.groupby("newsID")
                 .agg({"clicked": ["sum", "count"], "time": "first"})
@@ -229,7 +222,6 @@ def process_impressions_chunked(behaviors_df, is_test=False, chunk_size=50000):
             ]
 
         else:
-            # Test data - no clicks available
             expanded["newsID"] = expanded["impression"]
             chunk_articles = (
                 expanded.groupby("newsID")
@@ -241,18 +233,15 @@ def process_impressions_chunked(behaviors_df, is_test=False, chunk_size=50000):
 
         all_articles.append(chunk_articles)
 
-        # Clean up memory after each chunk
         del expanded, chunk
 
         if (chunk_idx + 1) % 5 == 0:
             print(f"    Completed {chunk_idx + 1}/{total_chunks} chunks")
 
-    # Combine all chunks and perform final aggregation
     print("  Combining chunks and performing final aggregation...")
     combined = pd.concat(all_articles, ignore_index=True)
 
     if not is_test:
-        # Final aggregation across all chunks
         final_articles = (
             combined.groupby("newsID")
             .agg(
@@ -280,7 +269,6 @@ def process_impressions_chunked(behaviors_df, is_test=False, chunk_size=50000):
     return final_articles
 
 
-# Process all datasets with chunking
 print("Starting chunked processing...")
 articles_train = process_impressions_chunked(
     behaviors_train, is_test=False, chunk_size=CONFIG["chunk_size"]
@@ -313,7 +301,6 @@ print(f"  Test: {len(df_test):,} articles")
 # ============================================================================
 print("\nStep 4: Creating comprehensive features with editorial criteria...")
 
-# Calculate median CTR from training data ONLY
 training_median_ctr = df_train["ctr"].median()
 print(f"Training median CTR: {training_median_ctr:.6f}")
 
@@ -322,14 +309,12 @@ def create_editorial_features(df, median_ctr_value):
     """Create comprehensive features including editorial criteria for engagement prediction"""
 
     print(f"  Creating basic text features...")
-    # Basic text features
     df["title_length"] = df["title"].str.len()
     df["abstract_length"] = df["abstract"].fillna("").str.len()
     df["title_word_count"] = df["title"].str.split().str.len()
     df["abstract_word_count"] = df["abstract"].fillna("").str.split().str.len()
 
     print(f"  Computing Flesch Reading Ease scores...")
-    # Flesch Reading Ease (critical for engagement)
     df["title_reading_ease"] = df["title"].apply(
         lambda x: flesch_reading_ease(x) if pd.notna(x) and len(str(x)) > 0 else 0
     )
@@ -340,7 +325,6 @@ def create_editorial_features(df, median_ctr_value):
     )
 
     print(f"  Creating headline quality indicators...")
-    # Headline Quality Indicators
     df["has_question"] = df["title"].str.contains(r"\?", na=False).astype(int)
     df["has_exclamation"] = df["title"].str.contains(r"!", na=False).astype(int)
     df["has_number"] = df["title"].str.contains(r"\d", na=False).astype(int)
@@ -349,7 +333,6 @@ def create_editorial_features(df, median_ctr_value):
     df["has_dash"] = df["title"].str.contains(r"[-–—]", na=False).astype(int)
 
     print(f"  Computing advanced headline metrics...")
-    # Advanced headline quality metrics
     df["title_upper_ratio"] = df["title"].apply(
         lambda x: (
             sum(c.isupper() for c in str(x)) / len(str(x))
@@ -366,12 +349,10 @@ def create_editorial_features(df, median_ctr_value):
         )
     )
 
-    # Content depth indicators
     df["has_abstract"] = (df["abstract_length"] > 0).fillna(False).astype(int)
     df["title_abstract_ratio"] = df["title_length"] / (df["abstract_length"] + 1)
 
     print(f"  Creating editorial scoring metrics...")
-    # Editorial Scores
     df["editorial_readability_score"] = (
         np.clip(df["title_reading_ease"] / 100, 0, 1)
         * EDITORIAL_CRITERIA["readability_weight"]
@@ -383,7 +364,7 @@ def create_editorial_features(df, median_ctr_value):
         * EDITORIAL_CRITERIA["headline_quality_weight"]
     )
 
-    # CTR GAIN POTENTIAL - Use provided median_ctr_value
+    # CTR GAIN POTENTIAL
     if "ctr" in df.columns and not df["ctr"].isna().all():
         df["ctr_gain_potential"] = np.maximum(
             0, EDITORIAL_CRITERIA["target_ctr_gain"] - (df["ctr"] - median_ctr_value)
@@ -393,7 +374,6 @@ def create_editorial_features(df, median_ctr_value):
         df["ctr_gain_potential"] = EDITORIAL_CRITERIA["target_ctr_gain"]
         df["below_median_ctr"] = 0
 
-    # Editorial quality flags
     df["needs_readability_improvement"] = (
         df["title_reading_ease"] < EDITORIAL_CRITERIA["target_reading_ease"]
     ).astype(int)
@@ -410,10 +390,9 @@ def create_editorial_features(df, median_ctr_value):
     return df
 
 
-# Apply comprehensive feature engineering with training median CTR
 df_train = create_editorial_features(df_train, training_median_ctr)
-df_val = create_editorial_features(df_val, training_median_ctr)  # Use training median
-df_test = create_editorial_features(df_test, training_median_ctr)  # Use training median
+df_val = create_editorial_features(df_val, training_median_ctr)
+df_test = create_editorial_features(df_test, training_median_ctr)
 
 print("Feature engineering completed")
 
@@ -649,11 +628,6 @@ def create_comprehensive_eda_plots(df_train, df_val):
     # 15. Feature Importance Preview
     ax15 = plt.subplot(5, 3, 15)
 
-    # Define features available at THIS STAGE (Step 6) that should be numeric
-    # and are relevant for correlation with 'high_engagement'.
-    # This list is based on features created in Step 4 (by create_editorial_features)
-    # and metrics from Step 2 (like 'ctr', 'total_impressions').
-    # It EXCLUDES 'category_enc' as that's created in Step 7.
     features_available_at_step6_for_corr = [
         "title_length",
         "abstract_length",
@@ -678,22 +652,18 @@ def create_comprehensive_eda_plots(df_train, df_val):
         "needs_readability_improvement",
         "suboptimal_word_count",
         "too_long_title",
-        "below_median_ctr",  # This feature is created in create_editorial_features (Step 4)
-        # Also include key metrics from Step 2 & 5 that are in df_train by now and are numeric
+        "below_median_ctr",
         "ctr",
         "total_impressions",
-        "total_clicks",  # total_clicks is related to ctr
+        "total_clicks",
     ]
 
-    # Filter this list to only include columns actually present in df_train
-    # and exclude the target 'high_engagement' from the feature list itself.
     features_to_examine = [
         col
         for col in features_available_at_step6_for_corr
         if col in df_train.columns and col != "high_engagement"
     ]
 
-    # Columns for which we'll build the correlation matrix (features + target)
     cols_for_corr_matrix = features_to_examine + ["high_engagement"]
 
     df_subset_for_plot15 = pd.DataFrame()
@@ -782,7 +752,6 @@ def create_comprehensive_eda_plots(df_train, df_val):
                 fontweight="bold",
             )
 
-    # Create pairplot for key features
     print("  Creating pairplot for key features...")
     key_features = [
         "ctr",
@@ -807,7 +776,6 @@ def create_comprehensive_eda_plots(df_train, df_val):
     plt.close()
 
 
-# Create comprehensive EDA plots
 print("Creating comprehensive EDA plots...")
 create_comprehensive_eda_plots(df_train, df_val)
 
@@ -816,7 +784,6 @@ create_comprehensive_eda_plots(df_train, df_val)
 # ============================================================================
 print("\nStep 7: Encoding categories...")
 
-# Fix categorical encoding
 df_train["category"] = (
     df_train["category"].astype(str).replace("nan", "unknown").fillna("unknown")
 )
@@ -1222,7 +1189,6 @@ def create_model_output_plots(df_train, df_val, features):
     plt.close()
 
 
-# Create model output plots
 create_model_output_plots(df_train, df_val, available_features)
 
 # ============================================================================
@@ -1238,12 +1204,9 @@ def sanitize_features_for_modeling(df, features_list, df_name):
     Converts boolean types to int.
     """
     print(f"Sanitizing features in DataFrame: {df_name} for modeling...")
-    df_copy = (
-        df.copy()
-    )  # Work on a copy to avoid SettingWithCopyWarning if df is a slice
+    df_copy = df.copy()
     for col in features_list:
         if col in df_copy.columns:
-            # If column is object, string, or even some problematic mixed type
             if df_copy[col].dtype == "object" or pd.api.types.is_string_dtype(
                 df_copy[col]
             ):
@@ -1254,11 +1217,9 @@ def sanitize_features_for_modeling(df, features_list, df_name):
                 df_copy[col] = pd.to_numeric(df_copy[col], errors="coerce")
                 coerced_nan_count = df_copy[col].isnull().sum()
                 if coerced_nan_count > original_nan_count:
-                    # This means pd.to_numeric introduced new NaNs by coercing strings
                     print(
                         f"    Warning: Coercion of '{col}' in {df_name} introduced {coerced_nan_count - original_nan_count} new NaN(s). Non-numeric strings were present."
                     )
-            # Convert boolean columns to int (0 or 1) if they aren't already
             elif pd.api.types.is_bool_dtype(df_copy[col]):
                 df_copy[col] = df_copy[col].astype(int)
         else:
@@ -1268,14 +1229,11 @@ def sanitize_features_for_modeling(df, features_list, df_name):
     return df_copy
 
 
-# 'available_features' is defined in Step 9. These are the columns for your model.
-# Ensure these are sanitized in all data splits:
 df_train = sanitize_features_for_modeling(df_train, available_features, "df_train")
 df_val = sanitize_features_for_modeling(df_val, available_features, "df_val")
 df_test = sanitize_features_for_modeling(df_test, available_features, "df_test")
 
 
-# Create final feature matrices
 X_train = df_train[available_features].fillna(0)
 y_train = pd.DataFrame(
     {
@@ -1296,7 +1254,6 @@ y_val = pd.DataFrame(
 
 X_test = df_test[available_features].fillna(0)
 
-# Save feature matrices
 X_train.to_parquet(PREP_DIR / "processed_data" / "X_train_optimized.parquet")
 y_train.to_parquet(PREP_DIR / "processed_data" / "y_train_optimized.parquet")
 
@@ -1305,7 +1262,6 @@ y_val.to_parquet(PREP_DIR / "processed_data" / "y_val_optimized.parquet")
 
 X_test.to_parquet(PREP_DIR / "processed_data" / "X_test_optimized.parquet")
 
-# Save article metadata for LLM integration
 article_metadata_columns = [
     "newsID",
     "title",
@@ -1416,14 +1372,14 @@ print(
     f"  Training median CTR: {training_median_ctr:.6f} (reference only - NOT used as model feature)"
 )
 print(
-    f"  ✅ DATA LEAKAGE PREVENTION: Excluded ctr_gain_potential, below_median_ctr, raw ctr"
+    f"  DATA LEAKAGE PREVENTION: Excluded ctr_gain_potential, below_median_ctr, raw ctr"
 )
 
 print(f"\nDATASET SUMMARY:")
 print(f"  Train: {len(X_train):,} articles with {len(available_features)} features")
 print(f"  Val: {len(X_val):,} articles")
 print(f"  Test: {len(X_test):,} articles")
-print(f"  🛡️  NO DATA LEAKAGE: Model uses only features available at publication time")
+print(f"  NO DATA LEAKAGE: Model uses only features available at publication time")
 
 print(f"\nEDITORIAL METRICS:")
 print(
@@ -1454,6 +1410,6 @@ print(f"\nREADY FOR NEXT STEP:")
 print(f"  Run XGBoost model training with Optuna optimization")
 print(f"  Features ready for classification and editorial analysis")
 print(f"  Article metadata prepared for LLM headline rewriting")
-print(f"  🎯 VALID MODEL: No data leakage - only publication-time features used")
+print(f"  VALID MODEL: No data leakage - only publication-time features used")
 
 print("=" * 80)

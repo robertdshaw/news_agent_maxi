@@ -541,6 +541,24 @@ print(
     f"Combined dataset: {len(all_metadata):,} articles (including {len(rewrite_variants) if not rewrite_results.empty else 0} rewrite variants)"
 )
 
+print(f"Combined dataset before deduplication: {len(all_metadata):,} articles")
+# Deduplicate all_metadata to ensure each newsID (original or rewrite variant) is unique
+# This means if an original newsID was in train, val, and test, only its first occurrence is kept.
+# Rewrite variants already have unique newsIDs.
+all_metadata = all_metadata.drop_duplicates(
+    subset=["newsID"], keep="first"
+).reset_index(drop=True)
+print(
+    f"Combined dataset AFTER deduplication by newsID: {len(all_metadata):,} unique articles/variants"
+)
+
+all_metadata = all_metadata.drop_duplicates(subset=["title"], keep="first").reset_index(
+    drop=True
+)
+print(
+    f"Combined dataset AFTER title deduplication: {len(all_metadata):,} unique titles to be indexed."
+)
+
 # ============================================================================
 # STEP 5: CREATE EMBEDDINGS FOR ALL CONTENT
 # ============================================================================
@@ -568,6 +586,9 @@ embedding_matrix = embedding_matrix.astype(np.float32)
 faiss.normalize_L2(embedding_matrix)
 
 print(f"Created embeddings: {embedding_matrix.shape}")
+print(
+    f"Embedding norms (should be ~1.0): {np.linalg.norm(embedding_matrix[:5], axis=1)}"
+)
 
 # ============================================================================
 # STEP 6: CREATE FAISS INDEX
@@ -579,11 +600,11 @@ n = embedding_matrix.shape[0]
 
 if n < 1000:
     print("Using Flat index for exact search")
-    index = faiss.IndexFlatIP(d)
+    index = index = faiss.IndexFlatL2(d)
     index_type = "Flat"
 else:
     print("Using IVF index for approximate search")
-    quantizer = faiss.IndexFlatIP(d)
+    quantizer = faiss.IndexFlatL2(d)
     nlist = min(CONFIG["nlist"], n // 10)
     index = faiss.IndexIVFFlat(quantizer, d, nlist)
     index_type = "IVF"
@@ -600,44 +621,43 @@ print(f"FAISS index created: {index_type}, {index.ntotal:,} vectors, {d}D")
 # ============================================================================
 # STEP 7: CREATE ENHANCED LOOKUP SYSTEM
 # ============================================================================
+
 print("\nStep 7: Creating enhanced article lookup system...")
+article_lookup = all_metadata.set_index("newsID").to_dict("index")
 
-if all_metadata.duplicated(subset=["newsID"]).any():
-    print(
-        f"INFO: Duplicate newsIDs detected in `all_metadata`. This is expected if articles span train/val/test periods."
-    )
-    print(
-        f"      For `article_lookup`, the metadata from the *first occurrence* of each newsID will be used."
-    )
-    # Create a version of all_metadata with unique newsIDs for the article_lookup dictionary
-    all_metadata_for_lookup = all_metadata.drop_duplicates(
-        subset=["newsID"], keep="first"
-    )
-    article_lookup = all_metadata_for_lookup.set_index("newsID").to_dict("index")
-else:
-    # If no duplicates, proceed as before
-    article_lookup = all_metadata.set_index("newsID").to_dict("index")
-
-# This maps the FAISS vector index (0 to N-1, where N is total rows in all_metadata)
-# to the newsID present at that specific row in the original all_metadata.
-# This is essential for interpreting FAISS search results correctly.
 idx_to_article_id = dict(enumerate(all_metadata["newsID"]))
-
-# This maps a newsID to its *first appearing* row index in all_metadata
-# (which corresponds to its first FAISS vector index).
-# Useful if you have a newsID and want to find its primary vector or the version stored in article_lookup.
 article_id_to_idx = {}
 for i, news_id_val in enumerate(all_metadata["newsID"]):
-    if (
-        news_id_val not in article_id_to_idx
-    ):  # Store only the first encountered index for each news_id
+    if news_id_val not in article_id_to_idx:
         article_id_to_idx[news_id_val] = i
 
-# --- The rest of your Step 7 print statements ---
+# print("\nStep 7: Creating enhanced article lookup system...")
+
+# if all_metadata.duplicated(subset=["newsID"]).any():
+#     print(
+#         f"INFO: Duplicate newsIDs detected in `all_metadata`. This is expected if articles span train/val/test periods."
+#     )
+#     print(
+#         f"      For `article_lookup`, the metadata from the *first occurrence* of each newsID will be used."
+#     )
+#     # Create a version of all_metadata with unique newsIDs for the article_lookup dictionary
+#     all_metadata_for_lookup = all_metadata.drop_duplicates(
+#         subset=["newsID"], keep="first"
+#     )
+#     article_lookup = all_metadata_for_lookup.set_index("newsID").to_dict("index")
+# else:
+#     # If no duplicates, proceed as before
+#     article_lookup = all_metadata.set_index("newsID").to_dict("index")
+
+idx_to_article_id = dict(enumerate(all_metadata["newsID"]))
+
+article_id_to_idx = {}
+for i, news_id_val in enumerate(all_metadata["newsID"]):
+    if news_id_val not in article_id_to_idx:
+        article_id_to_idx[news_id_val] = i
+
 print(f"Article lookup system created:")
-print(
-    f"   Total rows in all_metadata (and FAISS index): {len(all_metadata):,}"
-)  # Should match FAISS index.ntotal
+print(f"   Total rows in all_metadata (and FAISS index): {len(all_metadata):,}")
 print(f"   Unique newsIDs in article_lookup: {len(article_lookup):,}")
 print(
     f"   Original articles in all_metadata: {len(all_metadata[all_metadata['dataset'] != 'rewrite_variant']):,}"
@@ -645,7 +665,6 @@ print(
 print(
     f"   Rewrite variants in all_metadata: {len(all_metadata[all_metadata['dataset'] == 'rewrite_variant']):,}"
 )
-
 
 # ============================================================================
 # STEP 8: ENHANCED SEARCH FUNCTIONS
@@ -660,7 +679,6 @@ def search_similar_articles(query_text, top_k=10, include_rewrites=True):
     query_embedding = query_embedding.astype(np.float32)
     faiss.normalize_L2(query_embedding)
 
-    # Search more results to filter
     search_k = top_k * 3 if include_rewrites else top_k
     distances, indices = index.search(query_embedding, search_k)
 
@@ -668,10 +686,11 @@ def search_similar_articles(query_text, top_k=10, include_rewrites=True):
     for dist, idx in zip(distances[0], indices[0]):
         article_id = idx_to_article_id[idx]
         article_info = article_lookup[article_id].copy()
-        article_info["similarity_score"] = float(dist)
+        l2_distance = float(dist)
+        similarity_score = 1.0 / (1.0 + l2_distance)
+        article_info["similarity_score"] = similarity_score
         article_info["newsID"] = article_id
 
-        # Filter rewrite variants if requested
         if not include_rewrites and article_info.get("dataset") == "rewrite_variant":
             continue
 
@@ -692,12 +711,8 @@ def compare_original_vs_rewrites(original_newsID):
         )
         return None
 
-    original_article_data = article_lookup[
-        original_newsID
-    ].copy()  # Get data for original article
-    original_article_data["newsID"] = (
-        original_newsID  # Ensure original also has newsID key internally for consistency
-    )
+    original_article_data = article_lookup[original_newsID].copy()
+    original_article_data["newsID"] = original_newsID
 
     # Find rewrite variants
     rewrite_variants_list = []

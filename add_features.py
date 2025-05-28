@@ -3,12 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import (
-    LabelEncoder,
-)  # Will only be loaded for context, not used for fitting
 from sklearn.inspection import permutation_importance
 from pathlib import Path
-import pickle
 import json
 import warnings
 
@@ -35,9 +31,6 @@ def add_interaction_features(df_X_input: pd.DataFrame):
     """
     df = df_X_input.copy()
 
-    # --- INTERACTION FEATURES ---
-    # Ensure base columns exist, otherwise, this will raise a KeyError, which is informative.
-
     # 1. Binary * Binary
     df["interaction_question_x_number"] = df["has_question"] * df["has_number"]
 
@@ -52,7 +45,6 @@ def add_interaction_features(df_X_input: pd.DataFrame):
     )
 
     # 4. Label Encoded Categorical * Numerical
-    # 'category_enc' and 'title_pca_0' should exist from EDA_preprocess_features.py
     df["interaction_cat_enc_x_pca_0"] = df["category_enc"] * df["title_pca_0"]
 
     # 5. Numerical * Binary
@@ -77,17 +69,14 @@ def main():
         y_train_orig = pd.read_parquet(OUTPUT_DIR / "y_train_optimized.parquet")
 
         X_val_orig = pd.read_parquet(OUTPUT_DIR / "X_val_optimized.parquet")
-        # y_val is not strictly needed for creating features on X_val, but good to load if available
-        y_val_orig = pd.read_parquet(OUTPUT_DIR / "y_val_optimized.parquet")
 
         X_test_orig = pd.read_parquet(OUTPUT_DIR / "X_test_optimized.parquet")
-        # y_test does not exist for MIND dataset's test split typically
 
         print("  Original data loaded successfully.")
         print(f"    X_train_orig shape: {X_train_orig.shape}")
 
     except FileNotFoundError as e:
-        print(f"❌ Error: Required preprocessed file not found: {e}")
+        print(f"Error: Required preprocessed file not found: {e}")
         print("Please ensure 'EDA_preprocess_features.py' has been run successfully.")
         return
 
@@ -102,27 +91,20 @@ def main():
         "\nStep 3: Analyzing importance of NEW interaction features using RandomForestRegressor on training data..."
     )
 
-    # For this analysis, we only use the newly created interaction features
-    # and the 'ctr' target (which is not leaky for this specific analysis).
     df_analysis = X_train_with_interactions[new_feature_names].copy()
     df_analysis["ctr"] = y_train_orig["ctr"]
-
-    # Drop rows with NA if any interaction feature or 'ctr' had missing data FOR ANALYSIS ONLY
-    # This shouldn't happen if X_train_orig was already filled with 0 for NaNs,
-    # and interaction features are products of non-NaN columns.
-    # However, 'ctr' itself might have NaNs if some articles had no impressions.
     df_analysis.dropna(subset=new_feature_names + ["ctr"], inplace=True)
 
     if df_analysis.empty:
         print(
-            "⚠️ DataFrame for analysis is empty after dropping NaNs. Skipping feature importance analysis."
+            "DataFrame for analysis is empty after dropping NaNs. Skipping feature importance analysis."
         )
     else:
         X_for_analysis = df_analysis[new_feature_names]
         y_for_analysis = df_analysis["ctr"]
 
         print(
-            f"  Training RandomForestRegressor on {len(X_for_analysis)} samples to assess interaction feature importance..."
+            f"Training RandomForestRegressor on {len(X_for_analysis)} samples to assess interaction feature importance..."
         )
         model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
         model.fit(X_for_analysis, y_for_analysis)
@@ -140,7 +122,6 @@ def main():
             results.importances_mean, index=new_feature_names
         ).sort_values(ascending=False)
 
-        # Plot feature importances
         plt.figure(figsize=(10, 6))
         sns.barplot(x=importances.values, y=importances.index, palette="viridis")
         plt.title(
@@ -151,10 +132,8 @@ def main():
         plot_path = PLOT_OUTPUT_DIR / "interaction_feature_importance.png"
         plt.savefig(plot_path)
         print(f"  Interaction feature importance plot saved to: {plot_path}")
-        # plt.show() # Comment out for non-interactive runs
 
     print("\nStep 4: Saving datasets with added interaction features...")
-    # The X dataframes already have the new features.
     X_train_with_interactions.to_parquet(
         OUTPUT_DIR / "X_train_with_interactions.parquet", index=False
     )
@@ -183,7 +162,6 @@ def main():
         original_available_features = preprocessing_metadata.get(
             "available_features", []
         )
-        # Ensure no duplicates if script is run multiple times
         updated_available_features = original_available_features + [
             f_name
             for f_name in new_feature_names
@@ -203,7 +181,6 @@ def main():
             updated_available_features
         )
 
-        # Update files_created list
         if (
             "X_train_with_interactions.parquet"
             not in preprocessing_metadata["files_created"]
@@ -221,7 +198,7 @@ def main():
         print(f"  Preprocessing metadata updated at: {metadata_path}")
     else:
         print(
-            f"⚠️ Warning: Preprocessing metadata file not found at {metadata_path}. Cannot update."
+            f"Warning: Preprocessing metadata file not found at {metadata_path}. Cannot update."
         )
 
     print("\n" + "=" * 80)
