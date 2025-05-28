@@ -23,7 +23,7 @@ st.set_page_config(
 )
 
 # Constants
-MODEL_DIR = Path("models")
+MODEL_DIR = Path("model_output")
 FAISS_DIR = Path("faiss_index")
 PREP_DIR = Path("data/preprocessed")
 

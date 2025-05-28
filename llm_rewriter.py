@@ -287,7 +287,7 @@ Return only the final optimized headline.
 
     def _clean_response(self, response):
         """Clean LLM response"""
-        response = re.sub(r'^["\']|["\']$', "", response)  # Added missing '$'
+        response = re.sub(r'^["\']|["\']$', "", response)
         response = response.split("\n")[0]
         return response.strip()
 

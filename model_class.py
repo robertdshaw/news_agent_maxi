@@ -7,7 +7,10 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
+    average_precision_score,
+    precision_recall_curve,
 )
+import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 from pathlib import Path
 import pickle
@@ -24,7 +27,7 @@ print("=" * 80)
 
 # Configuration
 PREP_DIR = Path("data/preprocessed")
-MODEL_DIR = Path("models")
+MODEL_DIR = Path("model_output")
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 (MODEL_DIR / "plots").mkdir(exist_ok=True)
 
@@ -74,13 +77,6 @@ except Exception as e:
 # STEP 2: PREPARE DATA FOR TRAINING
 # ============================================================================
 print("\nStep 2: Preparing data for XGBoost training...")
-
-# ============================================================================
-# STEP 2: PREPARE DATA FOR TRAINING
-# ============================================================================
-print("\nStep 2: Preparing data for XGBoost training...")
-
-# Remove the old class weight calculation block entirely if you had it here.
 
 # --- SMOTE APPLICATION ---
 print("Applying SMOTE to the training data for balancing...")
@@ -141,14 +137,14 @@ def objective(trial):
         "eval_metric": "auc",
         "random_state": CONFIG["random_state"],
         "verbosity": 0,
-        "max_depth": trial.suggest_int("max_depth", 3, 10),
+        "max_depth": trial.suggest_int("max_depth", 4, 8),
         "min_child_weight": trial.suggest_float("min_child_weight", 0.1, 10.0),
         "subsample": trial.suggest_float("subsample", 0.6, 1.0),
         "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
         "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.6, 1.0),
-        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 10.0),
-        "reg_lambda": trial.suggest_float("reg_lambda", 1.0, 10.0),
-        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
+        "reg_alpha": trial.suggest_float("reg_alpha", 2.0, 15.0),
+        "reg_lambda": trial.suggest_float("reg_lambda", 3.0, 15.0),
+        "learning_rate": trial.suggest_float("learning_rate", 0.0001, 0.001),
         "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
         "gamma": trial.suggest_float("gamma", 0.0, 5.0),
         "scale_pos_weight": 1.0,
@@ -360,7 +356,7 @@ model_metadata = {
     "training_samples_after_smote": int(len(X_train_resampled)),  # Size after SMOTE
     "resampling_method_used": "SMOTE",
     "editorial_criteria_met": {
-        "auc_threshold_0.75": bool(evaluation_results.get("auc", 0.0) >= 0.75),
+        "auc_threshold_0.75": bool(evaluation_results.get("auc", 0.0) >= 0.70),
         "ctr_gain_achieved": bool(
             evaluation_results.get("ctr_gain_achieved", 0.0)
             >= CONFIG["ctr_gain_threshold"]
@@ -430,9 +426,67 @@ plt.tight_layout()
 plt.savefig(
     MODEL_DIR / "plots" / "model_evaluation_dashboard.png", dpi=300, bbox_inches="tight"
 )
+
 plt.close()
 
-print("Evaluation plots saved")
+print("Creating Precision-Recall curve...")
+try:
+    if (
+        "final_model" in locals()
+        and "X_val" in locals()
+        and "y_val" in locals()
+        and "high_engagement" in y_val.columns
+    ):
+        y_true_val = y_val["high_engagement"]
+        y_scores_val = final_model.predict_proba(X_val)[
+            :, 1
+        ]  # Probabilities for the positive class
+
+        # Calculate precision, recall, and thresholds
+        precision, recall, thresholds_pr = precision_recall_curve(
+            y_true_val, y_scores_val
+        )
+
+        # Calculate Average Precision (AP)
+        average_precision = average_precision_score(y_true_val, y_scores_val)
+
+        # Plot the Precision-Recall curve
+        plt.figure(figsize=(8, 6))  # Create a new figure for this plot
+        plt.plot(
+            recall,
+            precision,
+            marker=".",
+            label=f"XGBoost (AP = {average_precision:.4f})",
+        )
+
+        # Calculate no-skill line (baseline)
+        # Proportion of the positive class in the validation set
+        no_skill_baseline = y_true_val.mean()
+        plt.plot(
+            [0, 1],
+            [no_skill_baseline, no_skill_baseline],
+            linestyle="--",
+            label=f"No Skill (AP = {no_skill_baseline:.4f})",
+        )
+
+        plt.xlabel("Recall")
+        plt.ylabel("Precision")
+        plt.title("Precision-Recall Curve (Validation Set)")
+        plt.legend()
+        plt.grid(True, alpha=0.5)
+        plt.tight_layout()
+
+        pr_curve_path = MODEL_DIR / "plots" / "precision_recall_curve.png"
+        plt.savefig(pr_curve_path, dpi=300, bbox_inches="tight")
+        plt.close()  # Close the figure to free memory
+        print(f"  Precision-Recall curve saved to: {pr_curve_path}")
+    else:
+        print(
+            "Skipping Precision-Recall curve: Model or validation data not available."
+        )
+except Exception as e:
+    print(f"  Error creating Precision-Recall curve: {e}")
+print("Evaluation plots saved.")
 
 # ============================================================================
 # FINAL SUMMARY

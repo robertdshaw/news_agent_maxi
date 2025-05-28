@@ -16,8 +16,8 @@ warnings.filterwarnings("ignore")
 
 # Configuration
 PREP_DIR = Path("data/preprocessed")
-OUTPUT_DIR = Path("data/preprocessed/processed_data")  # Consistent output directory
-PLOT_OUTPUT_DIR = Path("outputs/plots")  # For plots from this script
+OUTPUT_DIR = Path("data/preprocessed/processed_data")
+PLOT_OUTPUT_DIR = Path("data/preprocessed/processed_data/plots")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 PLOT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

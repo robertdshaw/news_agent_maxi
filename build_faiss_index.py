@@ -17,7 +17,7 @@ print("=" * 80)
 # Configuration
 PREP_DIR = Path("data/preprocessed")
 FAISS_DIR = Path("faiss_index")
-MODEL_DIR = Path("models")
+MODEL_DIR = Path("model_output")
 FAISS_DIR.mkdir(parents=True, exist_ok=True)
 (FAISS_DIR / "rewrite_analysis").mkdir(exist_ok=True)
 
@@ -189,11 +189,7 @@ def create_features_for_headline_exact(title, abstract="", category="news"):
         * EDITORIAL_CRITERIA["headline_quality_weight"]
     )
 
-    # ========== STEP 7: CTR gain potential - REMOVED (DATA LEAKAGE) ==========
-    # NOTE: ctr_gain_potential and below_median_ctr are NOT included in model features
-    # to prevent data leakage (they depend on historical performance not available at publication)
-
-    # ========== STEP 7: Editorial quality flags (exact replication) ==========
+    # ========== STEP 7: Editorial quality flags
     features["needs_readability_improvement"] = (
         1
         if features["title_reading_ease"] < EDITORIAL_CRITERIA["target_reading_ease"]
@@ -212,10 +208,9 @@ def create_features_for_headline_exact(title, abstract="", category="news"):
         1 if features["title_length"] > EDITORIAL_CRITERIA["max_title_length"] else 0
     )
 
-    # ========== STEP 8: Category encoding (exact replication) ==========
+    # ========== STEP 8: Category encoding  ==========
     if category_encoder is not None:
         try:
-            # Clean category the same way as in EDA preprocessing
             category_clean = (
                 str(category).replace("nan", "unknown")
                 if pd.notna(category)
@@ -239,7 +234,7 @@ def create_features_for_headline_exact(title, abstract="", category="news"):
     else:
         features["category_enc"] = 0
 
-    # ========== STEP 9: Create title embeddings (exact replication) ==========
+    # ========== STEP 9: Create title embeddings  ==========
     try:
         title_embedding = embedder.encode([title])[0]
 
@@ -392,49 +387,69 @@ if not rewrite_results.empty:
         FAISS_DIR / "rewrite_analysis" / "headline_rewrites.parquet"
     )
 
-    # Create summary statistics with model-based improvements
+    # Create summary statistics with explicit type conversions for JSON compatibility
+    avg_quality_imp = rewrite_results["overall_quality_score"].mean()
+    avg_readability_imp = rewrite_results["readability_improvement"].mean()
+    avg_heuristic_ctr_imp = rewrite_results["predicted_ctr_improvement"].mean()
+
+    # Handle model_ctr_improvement potentially not existing if model didn't load
+    if (
+        "model_ctr_improvement" in rewrite_results.columns
+        and not rewrite_results["model_ctr_improvement"].isnull().all()
+    ):
+        avg_model_ctr_imp_val = rewrite_results["model_ctr_improvement"].mean()
+        best_strat_model_val = rewrite_results.loc[
+            rewrite_results["model_ctr_improvement"].idxmax(), "strategy"
+        ]
+        positive_model_imp_val = (rewrite_results["model_ctr_improvement"] > 0).sum()
+        negative_model_imp_val = (rewrite_results["model_ctr_improvement"] < 0).sum()
+        best_model_imp_val = rewrite_results["model_ctr_improvement"].max()
+    else:  # Fallback if model-based metrics aren't available
+        avg_model_ctr_imp_val = 0.0
+        best_strat_model_val = "N/A (model not used)"
+        positive_model_imp_val = 0
+        negative_model_imp_val = 0
+        best_model_imp_val = 0.0
+
     rewrite_summary = {
-        "total_rewrites": len(rewrite_results),
-        "unique_originals": rewrite_results["newsID"].nunique(),
-        "strategies_tested": rewrite_results["strategy"].unique().tolist(),
-        "average_quality_improvement": rewrite_results["overall_quality_score"].mean(),
-        "average_readability_improvement": rewrite_results[
-            "readability_improvement"
-        ].mean(),
-        "average_predicted_ctr_improvement": rewrite_results[
-            "predicted_ctr_improvement"
-        ].mean(),  # LLM heuristic-based improvement
-        "average_model_ctr_improvement": rewrite_results[
-            "model_ctr_improvement"
-        ].mean(),  # ACTUAL model-based improvement
-        "best_performing_strategy_by_model": (
-            rewrite_results.loc[
-                rewrite_results["model_ctr_improvement"].idxmax(), "strategy"
-            ]
-            if len(rewrite_results) > 0
-            else "N/A"
+        "total_rewrites": int(len(rewrite_results)),
+        "unique_originals": int(rewrite_results["newsID"].nunique()),
+        "strategies_tested": rewrite_results["strategy"]
+        .unique()
+        .tolist(),  # List of strings is fine
+        "average_quality_improvement": (
+            float(avg_quality_imp) if pd.notna(avg_quality_imp) else 0.0
         ),
-        "best_performing_strategy_by_quality": (
+        "average_readability_improvement": (
+            float(avg_readability_imp) if pd.notna(avg_readability_imp) else 0.0
+        ),
+        "average_predicted_ctr_improvement": (
+            float(avg_heuristic_ctr_imp) if pd.notna(avg_heuristic_ctr_imp) else 0.0
+        ),  # LLM heuristic
+        "average_model_ctr_improvement": (
+            float(avg_model_ctr_imp_val) if pd.notna(avg_model_ctr_imp_val) else 0.0
+        ),  # Actual model-based
+        "best_performing_strategy_by_model": str(best_strat_model_val),
+        "best_performing_strategy_by_quality": str(
             rewrite_results.loc[
                 rewrite_results["overall_quality_score"].idxmax(), "strategy"
             ]
             if len(rewrite_results) > 0
+            and not rewrite_results["overall_quality_score"].isnull().all()
             else "N/A"
         ),
-        "semantic_similarity_maintained": (
-            rewrite_results["semantic_similarity"] >= CONFIG["similarity_threshold"]
-        ).mean(),
-        "model_based_ctr_used": trained_model is not None,
-        "positive_model_improvements": (
-            rewrite_results["model_ctr_improvement"] > 0
-        ).sum(),
-        "negative_model_improvements": (
-            rewrite_results["model_ctr_improvement"] < 0
-        ).sum(),
+        "semantic_similarity_maintained": float(
+            (
+                rewrite_results["semantic_similarity"] >= CONFIG["similarity_threshold"]
+            ).mean()
+            if "semantic_similarity" in rewrite_results.columns
+            else 0.0
+        ),
+        "model_based_ctr_used": bool(trained_model is not None),  # Python bool
+        "positive_model_improvements": int(positive_model_imp_val),
+        "negative_model_improvements": int(negative_model_imp_val),
         "best_model_improvement": (
-            rewrite_results["model_ctr_improvement"].max()
-            if len(rewrite_results) > 0
-            else 0
+            float(best_model_imp_val) if pd.notna(best_model_imp_val) else 0.0
         ),
     }
 
@@ -672,32 +687,69 @@ def compare_original_vs_rewrites(original_newsID):
     """Compare original article with its rewrite variants"""
 
     if original_newsID not in article_lookup:
+        print(
+            f"Warning: Original newsID {original_newsID} not found in article_lookup."
+        )
         return None
 
-    original_article = article_lookup[original_newsID]
+    original_article_data = article_lookup[
+        original_newsID
+    ].copy()  # Get data for original article
+    original_article_data["newsID"] = (
+        original_newsID  # Ensure original also has newsID key internally for consistency
+    )
 
     # Find rewrite variants
-    rewrite_variants = []
-    for newsid, info in article_lookup.items():
-        if info.get("original_newsID") == original_newsID:
-            rewrite_variants.append(info)
+    rewrite_variants_list = []
+    for (
+        current_newsid,
+        info_dict,
+    ) in article_lookup.items():  # newsid_key is the actual newsID from article_lookup
+        if info_dict.get("original_newsID") == original_newsID:
+            # info_dict does not contain 'newsID' as a key because it was the index.
+            # Add it back for consistent structure.
+            variant_to_append = info_dict.copy()
+            variant_to_append["newsID"] = (
+                current_newsid  # Add the actual newsID of the variant
+            )
+            rewrite_variants_list.append(variant_to_append)
 
     # Get similarity scores between original and variants
-    if rewrite_variants:
-        original_idx = article_id_to_idx[original_newsID]
-        original_embedding = embedding_matrix[original_idx : original_idx + 1]
+    if rewrite_variants_list:
+        if (
+            original_newsID in article_id_to_idx
+        ):  # Check if original_newsID has a direct index mapping
+            original_idx = article_id_to_idx[original_newsID]
+            # Ensure embedding_matrix is accessible (it should be global in the script or passed appropriately)
+            original_embedding = embedding_matrix[original_idx : original_idx + 1]
 
-        for variant in rewrite_variants:
-            variant_idx = article_id_to_idx[variant["newsID"]]
-            variant_embedding = embedding_matrix[variant_idx : variant_idx + 1]
+            for variant in rewrite_variants_list:
+                if (
+                    variant["newsID"] in article_id_to_idx
+                ):  # Check if variant newsID has a mapping
+                    variant_idx = article_id_to_idx[variant["newsID"]]
+                    variant_embedding = embedding_matrix[variant_idx : variant_idx + 1]
 
-            similarity = np.dot(original_embedding, variant_embedding.T)[0, 0]
-            variant["similarity_to_original"] = float(similarity)
+                    similarity = np.dot(original_embedding, variant_embedding.T)[0, 0]
+                    variant["similarity_to_original"] = float(similarity)
+                else:
+                    variant["similarity_to_original"] = (
+                        np.nan
+                    )  # Or some other placeholder
+                    print(
+                        f"Warning: newsID {variant['newsID']} for variant not found in article_id_to_idx."
+                    )
+        else:
+            print(
+                f"Warning: original_newsID {original_newsID} not found in article_id_to_idx for similarity calculation."
+            )
+            for variant in rewrite_variants_list:
+                variant["similarity_to_original"] = np.nan
 
     return {
-        "original": original_article,
-        "variants": rewrite_variants,
-        "comparison_available": len(rewrite_variants) > 0,
+        "original": original_article_data,  # Use the fetched and potentially augmented original_article_data
+        "variants": rewrite_variants_list,
+        "comparison_available": len(rewrite_variants_list) > 0,
     }
 
 

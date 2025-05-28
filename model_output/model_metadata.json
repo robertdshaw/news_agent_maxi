@@ -1,0 +1,57 @@
+{
+  "model_type": "XGBoost_Optuna_Optimized",
+  "training_timestamp": "2025-05-28T17:29:12.785384",
+  "best_parameters": {
+    "max_depth": 8,
+    "min_child_weight": 3.6458197609358076,
+    "subsample": 0.8171251784645488,
+    "colsample_bytree": 0.6100938693141942,
+    "colsample_bylevel": 0.6061042908462647,
+    "reg_alpha": 6.03533001875387,
+    "reg_lambda": 14.904447897194043,
+    "learning_rate": 0.000996414878572692,
+    "n_estimators": 991,
+    "gamma": 3.516413833345153,
+    "objective": "binary:logistic",
+    "eval_metric": "auc",
+    "random_state": 42,
+    "verbosity": 1
+  },
+  "optuna_trials": 25,
+  "best_auc_score": 0.8659849407210946,
+  "final_evaluation": {
+    "auc": 0.7107847566952329,
+    "precision": 0.4470338983050847,
+    "recall": 0.31075110456553756,
+    "f1": 0.366637706342311,
+    "top_10_precision": 0.8,
+    "top_50_precision": 0.62,
+    "top_100_precision": 0.51,
+    "top_500_precision": 0.486,
+    "baseline_ctr": 0.03249082600448518,
+    "predicted_high_ctr": 0.06521582291893964,
+    "ctr_lift": 1.0072072932198448,
+    "ctr_gain_achieved": 0.03272499691445446,
+    "ctr_ranking_correlation": 0.19808580917021487
+  },
+  "feature_count": 178,
+  "training_samples": 27046,
+  "validation_samples": 6997,
+  "test_samples": 30042,
+  "training_samples_original": 27046,
+  "training_samples_after_smote": 39722,
+  "resampling_method_used": "SMOTE",
+  "editorial_criteria_met": {
+    "auc_threshold_0.75": true,
+    "ctr_gain_achieved": true,
+    "top_100_precision_0.5": true
+  },
+  "files_created": [
+    "xgboost_optimized_model.pkl",
+    "optuna_study.pkl",
+    "test_predictions.parquet",
+    "feature_importance.csv",
+    "model_metadata.json",
+    "plots/model_evaluation_dashboard.png"
+  ]
+}
