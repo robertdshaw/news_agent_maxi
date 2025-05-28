@@ -1,0 +1,34 @@
+{
+  "model_type": "Time-Aware XGBoost Classifier",
+  "task": "Binary Classification (High vs Low Engagement)",
+  "time_aware_setup": true,
+  "threshold": 0.032772106513199964,
+  "training_auc": 0.8916106183803498,
+  "training_log_loss": 0.5359899987184711,
+  "validation_auc": 0.6927879982721764,
+  "validation_log_loss": 0.612389285273878,
+  "time_aware_cv_auc": 0.645701825324948,
+  "performance_stability": 0.04708617294722839,
+  "concept_drift_detected": true,
+  "class_balance": {
+    "negative_samples": 16483,
+    "positive_samples": 7064,
+    "scale_pos_weight": 2.3333805209513026
+  },
+  "feature_count": 396,
+  "best_params": {
+    "n_estimators": 734,
+    "max_depth": 5,
+    "learning_rate": 0.011197345246287155,
+    "subsample": 0.7347390152853027,
+    "colsample_bytree": 0.7917960806889235,
+    "reg_alpha": 0.1873849716551037,
+    "reg_lambda": 7.719601152551413,
+    "objective": "binary:logistic",
+    "eval_metric": "logloss",
+    "scale_pos_weight": 2.3333805209513026,
+    "random_state": 42,
+    "n_jobs": -1
+  },
+  "deployment_ready": true
+}

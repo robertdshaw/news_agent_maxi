@@ -1,11 +1,3 @@
-import sys
-import xgboost as xgb
-
-print(f"--- SCRIPT EXECUTION DIAGNOSTICS (from model.py) ---")
-print(f"Python executable reported by script: {sys.executable}")
-print(f"XGBoost version reported by script: {xgb.__version__}")
-print(f"----------------------------------------------------")
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,12 +6,13 @@ from pathlib import Path
 import pickle
 import json
 
+import xgboost as xgb
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     roc_auc_score,
     roc_curve,
-    precision_recall_curve,
+    log_loss,  # Added log loss for better evaluation
 )
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.decomposition import PCA
@@ -106,15 +99,18 @@ def detect_concept_drift(X_old, X_new, feature_names, top_n=10):
 
     for feature in feature_names[:top_n]:  # Check top features to avoid noise
         if feature in X_old.columns and feature in X_new.columns:
-            stat, p_value = ks_2samp(X_old[feature], X_new[feature])
-            drift_results.append(
-                {
-                    "feature": feature,
-                    "ks_statistic": stat,
-                    "p_value": p_value,
-                    "significant_drift": p_value < 0.05,
-                }
-            )
+            try:
+                stat, p_value = ks_2samp(X_old[feature], X_new[feature])
+                drift_results.append(
+                    {
+                        "feature": feature,
+                        "ks_statistic": float(stat),
+                        "p_value": float(p_value),
+                        "significant_drift": bool(p_value < 0.05),
+                    }
+                )
+            except Exception as e:
+                print(f"Warning: Could not compute drift for {feature}: {e}")
 
     return sorted(drift_results, key=lambda x: x["ks_statistic"], reverse=True)
 
@@ -205,7 +201,7 @@ def objective(trial):
     """Optuna objective function with time-aware cross-validation."""
     params = {
         "objective": "binary:logistic",
-        "eval_metric": "auc",
+        "eval_metric": "logloss",  # Changed to log loss for better optimization
         "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
         "max_depth": trial.suggest_int("max_depth", 3, 10),
         "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
@@ -231,6 +227,7 @@ def objective(trial):
         model.fit(X_cv_train, y_cv_train)
 
         val_probs = model.predict_proba(X_cv_val)[:, 1]
+        # Use AUC for optimization but we'll track log loss too
         score = roc_auc_score(y_cv_val, val_probs)
         cv_scores.append(score)
 
@@ -248,7 +245,7 @@ best_params = study.best_params
 best_params.update(
     {
         "objective": "binary:logistic",
-        "eval_metric": "auc",
+        "eval_metric": "logloss",
         "scale_pos_weight": scale_pos_weight,
         "random_state": 42,
         "n_jobs": -1,
@@ -263,14 +260,30 @@ print(f"\nTraining Final Model:")
 print("-" * 21)
 print("Training on TRAIN set only (preserving time-based validation)")
 
-final_model = xgb.XGBClassifier(**best_params)
-final_model.fit(
-    X_train,
-    y_train_binary,
-    eval_set=[(X_train, y_train_binary), (X_val, y_val_binary)],
-    early_stopping_rounds=10,
-    verbose=False,
-)
+# CORRECT approach: Set early_stopping_rounds in constructor
+try:
+    # Method 1: early_stopping_rounds in constructor (recommended)
+    final_model = xgb.XGBClassifier(early_stopping_rounds=10, **best_params)
+    final_model.fit(
+        X_train,
+        y_train_binary,
+        eval_set=[(X_train, y_train_binary), (X_val, y_val_binary)],
+        verbose=False,
+    )
+    print("Using early stopping (constructor method)")
+
+except Exception as e:
+    print(f"Early stopping failed: {e}")
+    # Fallback: train without early stopping
+    final_model = xgb.XGBClassifier(**best_params)
+    final_model.fit(X_train, y_train_binary)
+    print("Training without early stopping")
+
+# Calculate training performance
+train_probs = final_model.predict_proba(X_train)[:, 1]
+train_preds = final_model.predict(X_train)
+train_auc = roc_auc_score(y_train_binary, train_probs)
+train_logloss = log_loss(y_train_binary, train_probs)
 
 # Model evaluation on validation set (future time period)
 print(f"\nModel Evaluation on Future Data (Validation Set):")
@@ -279,19 +292,24 @@ print("-" * 50)
 val_probs = final_model.predict_proba(X_val)[:, 1]
 val_preds = final_model.predict(X_val)
 val_auc = roc_auc_score(y_val_binary, val_probs)
+val_logloss = log_loss(y_val_binary, val_probs)
 
 print(f"Validation AUC (future performance): {val_auc:.4f}")
+print(f"Validation Log Loss (future performance): {val_logloss:.4f}")
+print(f"Training AUC: {train_auc:.4f}")
+print(f"Training Log Loss: {train_logloss:.4f}")
 print(f"Time-aware CV AUC (training): {study.best_value:.4f}")
-print(f"Performance difference: {val_auc - study.best_value:.4f}")
+print(f"AUC Performance difference: {val_auc - study.best_value:.4f}")
+print(f"Log Loss (lower is better): Train={train_logloss:.4f}, Val={val_logloss:.4f}")
 
 if val_auc < study.best_value - 0.05:
     print(
         "  WARNING: Significant performance drop on future data (possible concept drift)"
     )
 elif val_auc > study.best_value + 0.02:
-    print(" Model generalizes well to future data")
+    print("  ✅ Model generalizes well to future data")
 else:
-    print(" Stable performance across time periods")
+    print("  ✅ Stable performance across time periods")
 
 # Classification report
 print(f"\nValidation Set Performance Report:")
@@ -321,8 +339,10 @@ print("-" * 55)
 for i, row in feature_importance.head(15).iterrows():
     print(f"  {row['feature']:<30} {row['importance']:.4f}")
 
-# Category-specific performance analysis on validation set
+# Category-specific performance analysis on validation set (FIXED)
 category_performance = []
+category_df = pd.DataFrame()  # Initialize empty DataFrame
+
 if "category_enc" in X_val.columns:
     print(f"\nTopic-Specific Performance Analysis:")
     print("-" * 35)
@@ -331,133 +351,174 @@ if "category_enc" in X_val.columns:
 
     for cat in unique_categories:
         cat_mask = X_val["category_enc"] == cat
-        if cat_mask.sum() > 20:
-            cat_auc = roc_auc_score(y_val_binary[cat_mask], val_probs[cat_mask])
-            cat_baseline = y_val_binary[cat_mask].mean()
+        if cat_mask.sum() > 20:  # Ensure enough samples
+            cat_labels = y_val_binary[cat_mask]
+            cat_probs = val_probs[cat_mask]
 
-            category_performance.append(
-                {
-                    "category": int(cat),
-                    "samples": cat_mask.sum(),
-                    "baseline_rate": cat_baseline,
-                    "auc": cat_auc,
-                    "lift": cat_auc - 0.5,
-                    "performance_vs_overall": cat_auc - val_auc,
-                }
-            )
+            # Check if we have both classes to calculate AUC
+            if len(cat_labels.unique()) > 1:
+                try:
+                    cat_auc = roc_auc_score(cat_labels, cat_probs)
+                    cat_logloss = log_loss(cat_labels, cat_probs)
+                    cat_baseline = cat_labels.mean()
 
-    category_df = pd.DataFrame(category_performance).sort_values("auc", ascending=False)
-    print(f"Top 5 performing topics:")
-    for _, row in category_df.head(5).iterrows():
-        print(
-            f"  Category {row['category']:2d}: AUC={row['auc']:.3f} (n={row['samples']:3d})"
+                    category_performance.append(
+                        {
+                            "category": int(cat),
+                            "samples": int(cat_mask.sum()),
+                            "baseline_rate": float(cat_baseline),
+                            "auc": float(cat_auc),
+                            "log_loss": float(cat_logloss),
+                            "lift": float(cat_auc - 0.5),
+                            "performance_vs_overall": float(cat_auc - val_auc),
+                        }
+                    )
+                except ValueError as e:
+                    print(
+                        f"  Warning: Could not calculate metrics for category {cat}: {e}"
+                    )
+
+    if category_performance:
+        category_df = pd.DataFrame(category_performance).sort_values(
+            "auc", ascending=False
         )
+        print(f"Top 5 performing topics:")
+        for _, row in category_df.head(5).iterrows():
+            print(
+                f"  Category {int(row['category']):2d}: AUC={row['auc']:.3f}, LogLoss={row['log_loss']:.3f} (n={int(row['samples']):3d})"
+            )
+    else:
+        print("  No categories with sufficient data for analysis")
 
-# Create comprehensive visualizations
+# Create comprehensive visualizations (WITH ERROR HANDLING)
 print(f"\nCreating Analysis Visualizations...")
 
-fig, axes = plt.subplots(3, 2, figsize=(16, 20))
+try:
+    fig, axes = plt.subplots(3, 2, figsize=(16, 20))
 
-# 1. Feature Importance
-top_features = feature_importance.head(20)
-axes[0, 0].barh(range(len(top_features)), top_features["importance"])
-axes[0, 0].set_yticks(range(len(top_features)))
-axes[0, 0].set_yticklabels(top_features["feature"], fontsize=8)
-axes[0, 0].set_title("Top 20 Feature Importance")
-axes[0, 0].set_xlabel("Importance")
+    # 1. Feature Importance
+    top_features = feature_importance.head(20)
+    axes[0, 0].barh(range(len(top_features)), top_features["importance"])
+    axes[0, 0].set_yticks(range(len(top_features)))
+    axes[0, 0].set_yticklabels(top_features["feature"], fontsize=8)
+    axes[0, 0].set_title("Top 20 Feature Importance")
+    axes[0, 0].set_xlabel("Importance")
 
-# 2. ROC Curve Comparison
-fpr, tpr, _ = roc_curve(y_val_binary, val_probs)
-axes[0, 1].plot(fpr, tpr, label=f"Validation AUC = {val_auc:.3f}", linewidth=2)
-axes[0, 1].plot([0, 1], [0, 1], "k--", alpha=0.5, label="Random Baseline")
-axes[0, 1].set_xlabel("False Positive Rate")
-axes[0, 1].set_ylabel("True Positive Rate")
-axes[0, 1].set_title("ROC Curve (Future Data Performance)")
-axes[0, 1].legend()
-axes[0, 1].grid(True, alpha=0.3)
+    # 2. ROC Curve Comparison
+    fpr, tpr, _ = roc_curve(y_val_binary, val_probs)
+    axes[0, 1].plot(fpr, tpr, label=f"Validation AUC = {val_auc:.3f}", linewidth=2)
+    axes[0, 1].plot([0, 1], [0, 1], "k--", alpha=0.5, label="Random Baseline")
+    axes[0, 1].set_xlabel("False Positive Rate")
+    axes[0, 1].set_ylabel("True Positive Rate")
+    axes[0, 1].set_title("ROC Curve (Future Data Performance)")
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
 
-# 3. Time-Aware Performance
-train_probs = final_model.predict_proba(X_train)[:, 1]
-train_auc = roc_auc_score(y_train_binary, train_probs)
-performance_data = [train_auc, val_auc]
-time_periods = ["Train\n(Past)", "Validation\n(Future)"]
+    # 3. Time-Aware Performance
+    performance_data = [train_auc, val_auc]
+    time_periods = ["Train\n(Past)", "Validation\n(Future)"]
 
-bars = axes[1, 0].bar(time_periods, performance_data, color=["skyblue", "lightcoral"])
-axes[1, 0].set_ylabel("AUC Score")
-axes[1, 0].set_title("Performance Across Time Periods")
-axes[1, 0].set_ylim([0.5, 1.0])
-
-# Add value labels on bars
-for bar, value in zip(bars, performance_data):
-    axes[1, 0].text(
-        bar.get_x() + bar.get_width() / 2,
-        bar.get_height() + 0.01,
-        f"{value:.3f}",
-        ha="center",
-        va="bottom",
-        fontweight="bold",
+    bars = axes[1, 0].bar(
+        time_periods, performance_data, color=["skyblue", "lightcoral"]
     )
+    axes[1, 0].set_ylabel("AUC Score")
+    axes[1, 0].set_title("Performance Across Time Periods")
+    axes[1, 0].set_ylim([0.5, 1.0])
 
-# 4. Probability Distribution by Time Period
-axes[1, 1].hist(
-    train_probs, bins=50, alpha=0.6, label="Train Predictions", density=True
-)
-axes[1, 1].hist(
-    val_probs, bins=50, alpha=0.6, label="Validation Predictions", density=True
-)
-axes[1, 1].set_xlabel("Predicted Engagement Probability")
-axes[1, 1].set_ylabel("Density")
-axes[1, 1].set_title("Prediction Distribution by Time Period")
-axes[1, 1].legend()
+    # Add value labels on bars
+    for bar, value in zip(bars, performance_data):
+        axes[1, 0].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.01,
+            f"{value:.3f}",
+            ha="center",
+            va="bottom",
+            fontweight="bold",
+        )
 
-# 5. Confusion Matrix
-cm = confusion_matrix(y_val_binary, val_preds)
-sns.heatmap(cm, annot=True, fmt="d", ax=axes[2, 0], cmap="Blues")
-axes[2, 0].set_title("Confusion Matrix (Validation Set)")
-axes[2, 0].set_xlabel("Predicted")
-axes[2, 0].set_ylabel("Actual")
-
-# 6. Category Performance
-if category_performance:
-    cat_df_plot = category_df.head(10)
-    bars = axes[2, 1].bar(range(len(cat_df_plot)), cat_df_plot["auc"])
-    axes[2, 1].set_xticks(range(len(cat_df_plot)))
-    axes[2, 1].set_xticklabels(
-        [f"Cat {int(c)}" for c in cat_df_plot["category"]], rotation=45
+    # 4. Probability Distribution by Time Period
+    axes[1, 1].hist(
+        train_probs, bins=50, alpha=0.6, label="Train Predictions", density=True
     )
-    axes[2, 1].set_ylabel("AUC")
-    axes[2, 1].set_title("Topic Performance (AUC by Category)")
-    axes[2, 1].axhline(y=0.5, color="red", linestyle="--", alpha=0.5, label="Random")
-    axes[2, 1].axhline(
-        y=val_auc, color="green", linestyle="--", alpha=0.5, label="Overall"
+    axes[1, 1].hist(
+        val_probs, bins=50, alpha=0.6, label="Validation Predictions", density=True
     )
-    axes[2, 1].legend()
+    axes[1, 1].set_xlabel("Predicted Engagement Probability")
+    axes[1, 1].set_ylabel("Density")
+    axes[1, 1].set_title("Prediction Distribution by Time Period")
+    axes[1, 1].legend()
 
-plt.tight_layout()
-plt.savefig(
-    OUTPUT_DIR / "time_aware_xgboost_analysis.png", dpi=300, bbox_inches="tight"
-)
-plt.close()
+    # 5. Confusion Matrix
+    cm = confusion_matrix(y_val_binary, val_preds)
+    sns.heatmap(cm, annot=True, fmt="d", ax=axes[2, 0], cmap="Blues")
+    axes[2, 0].set_title("Confusion Matrix (Validation Set)")
+    axes[2, 0].set_xlabel("Predicted")
+    axes[2, 0].set_ylabel("Actual")
 
-# Model performance summary with time-awareness
+    # 6. Category Performance (with safety check)
+    if len(category_performance) > 0:
+        cat_df_plot = category_df.head(10)
+        bars = axes[2, 1].bar(range(len(cat_df_plot)), cat_df_plot["auc"])
+        axes[2, 1].set_xticks(range(len(cat_df_plot)))
+        axes[2, 1].set_xticklabels(
+            [f"Cat {int(c)}" for c in cat_df_plot["category"]], rotation=45
+        )
+        axes[2, 1].set_ylabel("AUC")
+        axes[2, 1].set_title("Topic Performance (AUC by Category)")
+        axes[2, 1].axhline(
+            y=0.5, color="red", linestyle="--", alpha=0.5, label="Random"
+        )
+        axes[2, 1].axhline(
+            y=val_auc, color="green", linestyle="--", alpha=0.5, label="Overall"
+        )
+        axes[2, 1].legend()
+    else:
+        axes[2, 1].text(
+            0.5,
+            0.5,
+            "No category data\navailable for plotting",
+            ha="center",
+            va="center",
+            transform=axes[2, 1].transAxes,
+            fontsize=12,
+        )
+        axes[2, 1].set_title("Topic Performance (No Data)")
+
+    plt.tight_layout()
+    plt.savefig(
+        OUTPUT_DIR / "time_aware_xgboost_analysis.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
+    print("✅ Visualizations saved successfully!")
+
+except Exception as e:
+    print(f"⚠️  Warning: Could not create visualizations: {e}")
+    print("Continuing without plots...")
+
+# Model performance summary with time-awareness (FIXED JSON SERIALIZATION)
 performance_summary = {
     "model_type": "Time-Aware XGBoost Classifier",
     "task": "Binary Classification (High vs Low Engagement)",
     "time_aware_setup": True,
     "threshold": float(ctr_threshold),
     "training_auc": float(train_auc),
+    "training_log_loss": float(train_logloss),
     "validation_auc": float(val_auc),
+    "validation_log_loss": float(val_logloss),
     "time_aware_cv_auc": float(study.best_value),
     "performance_stability": float(val_auc - study.best_value),
-    "concept_drift_detected": significant_drift_count > 10,
+    "concept_drift_detected": bool(significant_drift_count > 10),
     "class_balance": {
         "negative_samples": int((y_train_binary == 0).sum()),
         "positive_samples": int((y_train_binary == 1).sum()),
         "scale_pos_weight": float(scale_pos_weight),
     },
-    "feature_count": len(X_train.columns),
-    "best_params": best_params,
-    "deployment_ready": val_auc > 0.65,  # Threshold for production readiness
+    "feature_count": int(len(X_train.columns)),
+    "best_params": {
+        k: (float(v) if isinstance(v, (np.integer, np.floating)) else v)
+        for k, v in best_params.items()
+    },
+    "deployment_ready": bool(val_auc > 0.65),
 }
 
 print(f"\n" + "=" * 60)
@@ -465,7 +526,9 @@ print("AI NEWS EDITOR ASSISTANT - MODEL SUMMARY")
 print("=" * 60)
 print(f" Model Type: Time-Aware XGBoost Classifier")
 print(f" Training AUC: {train_auc:.4f}")
+print(f" Training Log Loss: {train_logloss:.4f}")
 print(f" Validation AUC (Future Performance): {val_auc:.4f}")
+print(f" Validation Log Loss (Future Performance): {val_logloss:.4f}")
 print(f" Performance Stability: {val_auc - study.best_value:+.4f}")
 print(
     f" Deployment Ready: {'YES' if performance_summary['deployment_ready'] else 'NO'}"
@@ -494,8 +557,12 @@ model_package = {
 }
 
 # Save model
-with open(OUTPUT_DIR / "ai_news_editor_model.pkl", "wb") as f:
-    pickle.dump(model_package, f)
+try:
+    with open(OUTPUT_DIR / "ai_news_editor_model.pkl", "wb") as f:
+        pickle.dump(model_package, f)
+    print("✅ Model saved successfully!")
+except Exception as e:
+    print(f"⚠️  Warning: Could not save model: {e}")
 
 # Save predictions with detailed recommendations for AI News Editor
 predictions_df = pd.DataFrame(
@@ -515,25 +582,40 @@ predictions_df = pd.DataFrame(
     }
 )
 
-predictions_df.to_csv(OUTPUT_DIR / "ai_news_editor_predictions.csv", index=False)
+try:
+    predictions_df.to_csv(OUTPUT_DIR / "ai_news_editor_predictions.csv", index=False)
+    print("✅ Predictions saved successfully!")
+except Exception as e:
+    print(f"⚠️  Warning: Could not save predictions: {e}")
 
 # Save all artifacts
-with open(OUTPUT_DIR / "model_performance.json", "w") as f:
-    json.dump(performance_summary, f, indent=2)
+try:
+    with open(OUTPUT_DIR / "model_performance.json", "w") as f:
+        json.dump(performance_summary, f, indent=2)
 
-feature_importance.to_csv(OUTPUT_DIR / "feature_importance.csv", index=False)
+    feature_importance.to_csv(OUTPUT_DIR / "feature_importance.csv", index=False)
 
-if category_performance:
-    category_df.to_csv(OUTPUT_DIR / "topic_performance.csv", index=False)
+    if len(category_performance) > 0:
+        category_df.to_csv(OUTPUT_DIR / "topic_performance.csv", index=False)
 
-# Concept drift report
-drift_df = pd.DataFrame(drift_analysis)
-drift_df.to_csv(OUTPUT_DIR / "concept_drift_analysis.csv", index=False)
+    # Concept drift report
+    drift_df = pd.DataFrame(drift_analysis)
+    drift_df.to_csv(OUTPUT_DIR / "concept_drift_analysis.csv", index=False)
+
+    print("✅ All performance reports saved!")
+
+except Exception as e:
+    print(f"⚠️  Warning: Could not save some reports: {e}")
 
 # AI News Editor Assistant integration guide
 integration_guide = {
     "model_file": "ai_news_editor_model.pkl",
     "time_aware_validation": True,
+    "metrics_used": {
+        "primary": "AUC (Area Under ROC Curve)",
+        "secondary": "Log Loss (Cross-entropy)",
+        "explanation": "AUC measures ranking ability, Log Loss measures probability calibration",
+    },
     "deployment_workflow": """
     1. Load model: ai_news_editor_model.pkl
     2. Process new headlines with same features
@@ -549,6 +631,7 @@ integration_guide = {
         "track_actual_vs_predicted": "Compare predictions to actual CTR weekly",
         "concept_drift": "Run drift analysis monthly",
         "performance_threshold": "Retrain if validation AUC drops below 0.60",
+        "log_loss_threshold": "Monitor if log loss increases significantly",
     },
     "a_b_testing": {
         "headline_comparison": "Use engagement_probability to rank variations",
@@ -557,19 +640,35 @@ integration_guide = {
     },
 }
 
-with open(OUTPUT_DIR / "ai_news_editor_integration.json", "w") as f:
-    json.dump(integration_guide, f, indent=2)
+try:
+    with open(OUTPUT_DIR / "ai_news_editor_integration.json", "w") as f:
+        json.dump(integration_guide, f, indent=2)
+    print("✅ Integration guide saved!")
+except Exception as e:
+    print(f"⚠️  Warning: Could not save integration guide: {e}")
 
-print(f"\n AI NEWS EDITOR ASSISTANT MODEL READY!")
+print(f"\n🎉 AI NEWS EDITOR ASSISTANT MODEL READY!")
 print(f" Files created:")
 print(f"   - ai_news_editor_model.pkl (main model)")
 print(f"   - ai_news_editor_predictions.csv (test predictions)")
 print(f"   - concept_drift_analysis.csv (time stability)")
-print(f"   - topic_performance.csv (category insights)")
+if len(category_performance) > 0:
+    print(f"   - topic_performance.csv (category insights)")
 print(f"   - ai_news_editor_integration.json (deployment guide)")
+print(f"   - model_performance.json (metrics summary)")
+print(f"   - feature_importance.csv (feature analysis)")
 
-print(f"\n Ready for Streamlit Integration:")
+print(f"\n📊 Ready for Streamlit Integration:")
 print(f"   - Time-aware validation ensures real-world performance")
 print(f"   - Concept drift detection for model monitoring")
 print(f"   - Topic-specific insights for editorial strategy")
 print(f"   - Production-ready thresholds for filtering/ranking")
+print(f"   - Log loss tracking for probability calibration")
+
+print(f"\n📈 Model Performance Summary:")
+print(f"   - AUC Score: {val_auc:.3f} (>0.65 = deployment ready)")
+print(f"   - Log Loss: {val_logloss:.3f} (lower = better calibration)")
+print(f"   - Stability: {val_auc - study.best_value:+.3f} (time consistency)")
+print(f"   - Features: {len(X_train.columns)} (after filtering)")
+
+print("\n" + "=" * 60)

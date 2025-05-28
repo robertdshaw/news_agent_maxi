@@ -1,0 +1,15 @@
+{
+  "total_rewrites": 8,
+  "unique_originals": 2,
+  "strategies_tested": [
+    "readability",
+    "engagement",
+    "structure",
+    "comprehensive"
+  ],
+  "average_quality_improvement": 51.25,
+  "average_readability_improvement": -6.109285714285701,
+  "average_predicted_ctr_improvement": 0.0023066550544978736,
+  "best_performing_strategy": "engagement",
+  "semantic_similarity_maintained": 0.5
+}

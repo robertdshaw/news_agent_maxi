@@ -1,0 +1,21 @@
+{
+  "model_file": "ai_news_editor_model.pkl",
+  "time_aware_validation": true,
+  "metrics_used": {
+    "primary": "AUC (Area Under ROC Curve)",
+    "secondary": "Log Loss (Cross-entropy)",
+    "explanation": "AUC measures ranking ability, Log Loss measures probability calibration"
+  },
+  "deployment_workflow": "\n    1. Load model: ai_news_editor_model.pkl\n    2. Process new headlines with same features\n    3. Get engagement probabilities (0-1)\n    4. Apply thresholds:\n       - Filter: < 0.4 (low engagement)\n       - Consider: 0.4-0.6 (medium engagement)  \n       - Prioritize: > 0.6 (high engagement)\n    5. Rank by engagement_probability for ordering\n    6. Monitor performance and retrain with new data\n    ",
+  "monitoring": {
+    "track_actual_vs_predicted": "Compare predictions to actual CTR weekly",
+    "concept_drift": "Run drift analysis monthly",
+    "performance_threshold": "Retrain if validation AUC drops below 0.60",
+    "log_loss_threshold": "Monitor if log loss increases significantly"
+  },
+  "a_b_testing": {
+    "headline_comparison": "Use engagement_probability to rank variations",
+    "statistical_significance": "Require 100+ impressions per variation",
+    "winner_selection": "Choose headline with highest probability"
+  }
+}

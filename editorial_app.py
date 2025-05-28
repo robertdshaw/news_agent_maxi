@@ -1,886 +1,996 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 import numpy as np
-import faiss
 import pickle
 import json
-import openai
-from sentence_transformers import SentenceTransformer
+import faiss
 from pathlib import Path
-from model_loader import get_model_paths, check_pipeline_status, load_ctr_model
+from sentence_transformers import SentenceTransformer
+import plotly.express as px
+import plotly.graph_objects as go
 from textstat import flesch_reading_ease
-import datetime
-import random
+import warnings
+from llm_rewriter import LLMHeadlineRewriter
 
-# App Configuration & Custom Styles
+warnings.filterwarnings("ignore")
+
+# Page configuration
 st.set_page_config(
-    page_title="Agentic AI News Editor", layout="wide", initial_sidebar_state="expanded"
-)
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
-    html, body, [class*=\"css\"]  {
-        font-family: 'Poppins', sans-serif;
-        background-color: #f5f5f5;
-    }
-    .block-container {
-        background-color: #ffffff;
-        border: 1px solid #dcdcdc;
-        padding: 2rem;
-        border-radius: 0.5rem;
-    }
-    h1, h2, h3, .stHeader {
-        font-family: 'Poppins', sans-serif;
-        font-weight: 600;
-    }
-    .stTable table {
-        width: 100% !important;
-    }
-    .stTable td, .stTable th {
-        padding: 4px 8px !important;
-        font-size: 12px !important;
-    }
-    .metric-card {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border: 1px solid #e9ecef;
-        margin: 0.5rem 0;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+    page_title="Article Engagement Predictor & Rewriter",
+    page_icon="📰",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
+# Constants
+MODEL_DIR = Path("models")
+FAISS_DIR = Path("faiss_index")
+PREP_DIR = Path("data/preprocessed")
 
-# Helper Functions
+
 @st.cache_resource
-def load_resources():
-    """Load all required resources with error handling."""
-    paths = get_model_paths()
-    status = check_pipeline_status()
-
-    # Check if essential components are available
-    if not status["preprocessing_completed"]:
-        st.error(
-            "Preprocessing not completed. Please run preprocessing pipeline first."
-        )
-        st.stop()
-
+def load_model():
+    """Load the trained engagement prediction model"""
     try:
-        # Load processed data
-        train_features = pd.read_parquet(paths["train_features"])
-        train_targets = pd.read_parquet(paths["train_targets"])
+        model_files = list(MODEL_DIR.glob("*_optimized_model.pkl"))
+        model_file = (
+            model_files[0] if model_files else MODEL_DIR / "xgboost_optimized_model.pkl"
+        )
 
-        # Load metadata
-        with open(paths["feature_metadata"], "r") as f:
-            feature_metadata = json.load(f)
+        with open(model_file, "rb") as f:
+            model = pickle.load(f)
 
-        with open(paths["label_encoder"], "r") as f:
-            label_encoder_info = json.load(f)
+        metadata_file = MODEL_DIR / "model_metadata.json"
+        metadata = {}
+        if metadata_file.exists():
+            with open(metadata_file, "r") as f:
+                metadata = json.load(f)
 
-        # Load embeddings and FAISS index
-        if status["embeddings_completed"]:
-            with open(paths["embeddings"], "rb") as f:
-                emb_data = pickle.load(f)
-            index = faiss.read_index(str(paths["faiss_index"]))
-        else:
-            st.warning("Embeddings not available. Some features will be limited.")
-            emb_data = None
-            index = None
+        model_pipeline = {
+            "model": model,
+            "model_name": metadata.get("model_type", "XGBoost"),
+            "target": "high_engagement",
+            "performance": metadata.get("final_evaluation", {}),
+            "feature_names": (
+                list(model.feature_names_in_)
+                if hasattr(model, "feature_names_in_")
+                else []
+            ),
+            "scaler": None,
+        }
 
-        # Load CTR model (prioritize LightGBM for compatibility)
-        if status["training_completed"]:
-            model_data, err = load_ctr_model(paths["ctr_model"])
-            if err:
-                st.error(f"Error loading CTR model: {err}")
-                st.stop()
-            ctr_model = model_data["model"]
-            feature_names = model_data.get("feature_names", [])
-            model_type = model_data.get("model_type", "lightgbm")
-        else:
-            st.warning("CTR model not trained. Please run training script first.")
-            ctr_model = None
-            feature_names = None
-            model_type = None
+        return model_pipeline
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None
 
-        # Load sentence transformer
-        embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+@st.cache_resource
+def load_search_system():
+    """Load the enhanced FAISS search system with rewrite capabilities"""
+    try:
+        index = faiss.read_index(str(FAISS_DIR / "article_index.faiss"))
+
+        with open(FAISS_DIR / "article_lookup.pkl", "rb") as f:
+            article_lookup = pickle.load(f)
+
+        with open(FAISS_DIR / "article_id_mappings.pkl", "rb") as f:
+            mappings = pickle.load(f)
+
+        with open(FAISS_DIR / "index_metadata.json", "r") as f:
+            metadata = json.load(f)
 
         return {
-            "train_features": train_features,
-            "train_targets": train_targets,
-            "feature_metadata": feature_metadata,
-            "label_encoder_info": label_encoder_info,
-            "emb_data": emb_data,
             "index": index,
-            "ctr_model": ctr_model,
-            "feature_names": feature_names,
-            "model_type": model_type,
-            "embedder": embedder,
-            "status": status,
+            "article_lookup": article_lookup,
+            "mappings": mappings,
+            "metadata": metadata,
+        }
+    except Exception as e:
+        st.error(f"Error loading search system: {e}")
+        return None
+
+
+@st.cache_resource
+def load_llm_rewriter():
+    """Load the LLM headline rewriter"""
+    return LLMHeadlineRewriter()
+
+
+@st.cache_resource
+def load_embedder():
+    """Load the sentence transformer model"""
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+
+@st.cache_resource
+def load_preprocessing_components():
+    """Load preprocessing components for exact feature replication"""
+    try:
+        # Load preprocessing metadata
+        with open(
+            PREP_DIR / "processed_data" / "preprocessing_metadata.json", "r"
+        ) as f:
+            preprocessing_metadata = json.load(f)
+
+        # Load category encoder
+        with open(PREP_DIR / "processed_data" / "category_encoder.pkl", "rb") as f:
+            category_encoder = pickle.load(f)
+
+        # Load PCA transformer if available
+        pca_transformer = None
+        pca_file = PREP_DIR / "processed_data" / "pca_transformer.pkl"
+        if pca_file.exists():
+            with open(pca_file, "rb") as f:
+                pca_transformer = pickle.load(f)
+
+        return {
+            "preprocessing_metadata": preprocessing_metadata,
+            "category_encoder": category_encoder,
+            "pca_transformer": pca_transformer,
+            "training_median_ctr": preprocessing_metadata.get(
+                "training_median_ctr", 0.030
+            ),
+            "feature_order": preprocessing_metadata.get("available_features", []),
+        }
+    except Exception as e:
+        st.error(f"Error loading preprocessing components: {e}")
+        return None
+
+
+def create_article_features_exact(title, abstract="", category="news", components=None):
+    """Create features for a single article using EXACT replication of preprocessing pipeline"""
+
+    # Editorial criteria (must match EDA_preprocess_features.py)
+    EDITORIAL_CRITERIA = {
+        "target_reading_ease": 60,
+        "readability_weight": 0.3,
+        "engagement_weight": 0.4,
+        "headline_quality_weight": 0.2,
+        "timeliness_weight": 0.1,
+        "target_ctr_gain": 0.05,
+        "optimal_word_count": (8, 12),
+        "max_title_length": 75,
+    }
+
+    features = {}
+
+    # ========== STEP 1: Basic text features (exact replication) ==========
+    features["title_length"] = len(title)
+    features["abstract_length"] = len(abstract)
+    features["title_word_count"] = len(title.split())
+    features["abstract_word_count"] = len(abstract.split())
+
+    # ========== STEP 2: Flesch Reading Ease (exact replication) ==========
+    features["title_reading_ease"] = flesch_reading_ease(title) if title else 0
+    features["abstract_reading_ease"] = flesch_reading_ease(abstract) if abstract else 0
+
+    # ========== STEP 3: Headline Quality Indicators (exact replication) ==========
+    features["has_question"] = 1 if "?" in title else 0
+    features["has_exclamation"] = 1 if "!" in title else 0
+    features["has_number"] = 1 if any(c.isdigit() for c in title) else 0
+    features["has_colon"] = 1 if ":" in title else 0
+    features["has_quotes"] = 1 if any(q in title for q in ['"', "'", '"', '"']) else 0
+    features["has_dash"] = 1 if any(d in title for d in ["-", "–", "—"]) else 0
+
+    # ========== STEP 4: Advanced headline metrics (exact replication) ==========
+    features["title_upper_ratio"] = (
+        sum(c.isupper() for c in title) / len(title) if title else 0
+    )
+    features["title_caps_words"] = len(
+        [w for w in title.split() if w.isupper() and len(w) > 1]
+    )
+    features["avg_word_length"] = (
+        np.mean([len(word) for word in title.split()]) if title.split() else 0
+    )
+
+    # ========== STEP 5: Content depth indicators (exact replication) ==========
+    features["has_abstract"] = 1 if len(abstract) > 0 else 0
+    features["title_abstract_ratio"] = features["title_length"] / (
+        features["abstract_length"] + 1
+    )
+
+    # ========== STEP 6: Editorial scores (exact replication) ==========
+    features["editorial_readability_score"] = (
+        np.clip(features["title_reading_ease"] / 100, 0, 1)
+        * EDITORIAL_CRITERIA["readability_weight"]
+    )
+    features["editorial_headline_score"] = (
+        (features["has_question"] + features["has_number"] + features["has_colon"])
+        / 3
+        * EDITORIAL_CRITERIA["headline_quality_weight"]
+    )
+
+    # ========== STEP 7: CTR gain potential - REMOVED (DATA LEAKAGE) ==========
+    # NOTE: ctr_gain_potential and below_median_ctr are NOT included in model features
+    # to prevent data leakage (they depend on historical performance not available at publication)
+
+    # ========== STEP 7: Editorial quality flags (exact replication) ==========
+    features["needs_readability_improvement"] = (
+        1
+        if features["title_reading_ease"] < EDITORIAL_CRITERIA["target_reading_ease"]
+        else 0
+    )
+    features["suboptimal_word_count"] = (
+        1
+        if (
+            features["title_word_count"] < EDITORIAL_CRITERIA["optimal_word_count"][0]
+            or features["title_word_count"]
+            > EDITORIAL_CRITERIA["optimal_word_count"][1]
+        )
+        else 0
+    )
+    features["too_long_title"] = (
+        1 if features["title_length"] > EDITORIAL_CRITERIA["max_title_length"] else 0
+    )
+
+    # ========== STEP 8: Category encoding (exact replication) ==========
+    if components and components["category_encoder"] is not None:
+        try:
+            category_encoder = components["category_encoder"]
+            # Clean category the same way as in EDA preprocessing
+            category_clean = (
+                str(category).replace("nan", "unknown")
+                if pd.notna(category)
+                else "unknown"
+            )
+
+            if category_clean in category_encoder.classes_:
+                features["category_enc"] = category_encoder.transform([category_clean])[
+                    0
+                ]
+            else:
+                # Use "unknown" if available, otherwise use 0
+                features["category_enc"] = (
+                    category_encoder.transform(["unknown"])[0]
+                    if "unknown" in category_encoder.classes_
+                    else 0
+                )
+        except Exception as e:
+            st.warning(f"Category encoding failed for '{category}': {e}")
+            features["category_enc"] = 0
+    else:
+        features["category_enc"] = 0
+
+    # ========== STEP 9: Create title embeddings (exact replication) ==========
+    try:
+        embedder = load_embedder()
+        title_embedding = embedder.encode([title])[0]
+
+        # Add full embeddings first
+        for i, emb_val in enumerate(title_embedding[:384]):
+            features[f"title_emb_{i}"] = float(emb_val)
+
+        # Apply PCA if transformer is available
+        if components and components["pca_transformer"] is not None:
+            # Create embedding matrix for PCA transformation
+            embedding_matrix = np.array([title_embedding[:384]]).astype(np.float32)
+            pca_embeddings = components["pca_transformer"].transform(embedding_matrix)[
+                0
+            ]
+
+            # Add PCA features (these will be used if model was trained with PCA)
+            for i, pca_val in enumerate(pca_embeddings):
+                features[f"title_pca_{i}"] = float(pca_val)
+
+    except Exception as e:
+        st.warning(f"Could not create embeddings for title: {e}")
+        # Add zero embeddings as fallback
+        for i in range(384):
+            features[f"title_emb_{i}"] = 0.0
+        # Add zero PCA features if PCA was expected
+        if components and components["pca_transformer"] is not None:
+            for i in range(components["pca_transformer"].n_components_):
+                features[f"title_pca_{i}"] = 0.0
+
+    return features
+
+
+def predict_engagement(
+    title, abstract="", category="news", model_pipeline=None, components=None
+):
+    """Predict engagement for a single article using exact feature replication"""
+    if model_pipeline is None or components is None:
+        return None
+
+    try:
+        # Create features using exact replication of preprocessing pipeline
+        features = create_article_features_exact(title, abstract, category, components)
+
+        # Create feature vector in the exact order expected by the model
+        feature_order = components.get("feature_order", [])
+
+        if feature_order:
+            # Use the exact feature order from training
+            feature_vector = []
+            for feat_name in feature_order:
+                feature_vector.append(features.get(feat_name, 0.0))
+        elif hasattr(model_pipeline["model"], "feature_names_in_"):
+            # Fallback to model's expected features
+            expected_features = list(model_pipeline["model"].feature_names_in_)
+            feature_vector = []
+            for feat_name in expected_features:
+                feature_vector.append(features.get(feat_name, 0.0))
+        else:
+            # Last resort: use all features in sorted order
+            feature_vector = [features[k] for k in sorted(features.keys())]
+
+        feature_vector = np.array(feature_vector).reshape(1, -1)
+
+        # Predict
+        prediction = model_pipeline["model"].predict(feature_vector)[0]
+        prediction_proba = model_pipeline["model"].predict_proba(feature_vector)[0]
+
+        # Convert engagement probability to estimated CTR
+        engagement_prob = float(prediction_proba[1])
+        estimated_ctr = max(
+            0.01, engagement_prob * 0.1
+        )  # Scale to reasonable CTR range
+
+        return {
+            "high_engagement": bool(prediction),
+            "engagement_probability": engagement_prob,
+            "estimated_ctr": estimated_ctr,
+            "confidence": float(max(prediction_proba)),
+            "features": features,
         }
 
     except Exception as e:
-        st.error(f"Error loading resources: {str(e)}")
-        st.stop()
+        st.error(f"Error in prediction: {e}")
+        return None
 
 
-def extract_enhanced_features(
-    headline,
-    category="news",
-    publish_time=None,
-    day_type="Weekday",
-    embedder=None,
-    feature_metadata=None,
-):
-    """Enhanced feature extraction that matches your preprocessing pipeline."""
+def main():
+    # Load models and systems
+    model_pipeline = load_model()
+    search_system = load_search_system()
+    llm_rewriter = load_llm_rewriter()
+    preprocessing_components = load_preprocessing_components()
 
-    if publish_time is None:
-        publish_time = datetime.datetime.now()
+    # Header
+    st.title("📰 Article Engagement Predictor & AI Rewriter")
+    st.markdown(
+        "**Predict engagement and optimize headlines with AI-powered rewriting**"
+    )
 
-    # Generate embeddings
-    if embedder is not None:
-        embs = embedder.encode([headline])
-        emb_dim = feature_metadata.get("embedding_dim", 50)
+    # Sidebar
+    st.sidebar.header("🎯 System Status")
+    if model_pipeline:
+        st.sidebar.success(f"✅ Model: {model_pipeline['model_name']}")
+        if "auc" in model_pipeline.get("performance", {}):
+            st.sidebar.info(f"📊 AUC: {model_pipeline['performance']['auc']:.4f}")
     else:
-        embs = np.zeros((1, 50))
-        emb_dim = 50
+        st.sidebar.error("❌ Model not loaded")
 
-    # Basic text features
-    title_words = headline.split() if headline else []
-
-    features = {
-        # Text analysis features
-        "title_length": len(headline) if headline else 0,
-        "abstract_length": 100,  # Default for abstract
-        "title_word_count": len(title_words),
-        "abstract_word_count": 15,  # Default
-        "title_reading_ease": flesch_reading_ease(headline) if headline.strip() else 50,
-        "abstract_reading_ease": 60,  # Default
-        # Pattern features
-        "has_question": int("?" in headline),
-        "has_exclamation": int("!" in headline),
-        "has_number": int(any(c.isdigit() for c in headline)),
-        "has_colon": int(":" in headline),
-        "has_quotes": int(any(q in headline for q in ['"', "'"])),
-        "has_hyphen": int("-" in headline),
-        "has_brackets": int(any(b in headline for b in "[]())")),
-        # Capitalization features
-        "title_upper_ratio": (
-            sum(c.isupper() for c in headline) / len(headline) if headline else 0
-        ),
-        "starts_with_caps": int(headline[0].isupper() if headline else False),
-        # Enhanced temporal features
-        "hour": publish_time.hour,
-        "day_of_week": publish_time.weekday(),
-        "is_weekend": int(day_type == "Weekend" or publish_time.weekday() >= 5),
-        # News-specific temporal patterns
-        "is_morning": int(6 <= publish_time.hour < 12),
-        "is_lunch": int(11 <= publish_time.hour < 14),
-        "is_evening": int(17 <= publish_time.hour < 22),
-        "is_night": int(publish_time.hour >= 22 or publish_time.hour < 6),
-        "is_commute_time": int(
-            (7 <= publish_time.hour <= 9) or (17 <= publish_time.hour <= 19)
-        ),
-        "is_prime_time": int(19 <= publish_time.hour <= 23),
-        # Cyclical encoding
-        "hour_sin": np.sin(2 * np.pi * publish_time.hour / 24),
-        "hour_cos": np.cos(2 * np.pi * publish_time.hour / 24),
-        "day_sin": np.sin(2 * np.pi * publish_time.weekday() / 7),
-        "day_cos": np.cos(2 * np.pi * publish_time.weekday() / 7),
-        # Content freshness (assume recent)
-        "hours_since_published": 1.0,
-        "is_breaking_news": int(
-            any(word in headline.lower() for word in ["breaking", "urgent", "just in"])
-        ),
-        "is_stale_news": 0,  # Assume fresh
-        # Category encoding
-        "category_enc": {
-            "news": 0,
-            "sports": 1,
-            "entertainment": 2,
-            "finance": 3,
-            "lifestyle": 4,
-            "technology": 5,
-        }.get(category.lower(), 0),
-        # Context features
-        "title_complexity": len(headline) / len(title_words) if title_words else 0,
-        "title_sentiment_words": len(
-            [
-                w
-                for w in title_words
-                if w.lower()
-                in ["amazing", "shocking", "exclusive", "breaking", "urgent"]
-            ]
-        ),
-        "has_detailed_abstract": 1,  # Assume yes
-        "abstract_title_ratio": 100 / (len(headline) + 1),  # Default ratio
-    }
-
-    # Add embeddings
-    for j in range(min(emb_dim, embs.shape[1])):
-        features[f"emb_{j}"] = embs[0, j]
-
-    return pd.DataFrame([features])
-
-
-def predict_ctr_enhanced(headline, category, publish_time, day_type, resources):
-    """Enhanced CTR prediction with better feature matching and NaN handling."""
-    try:
-        # Extract features with enhanced pipeline
-        features_df = extract_enhanced_features(
-            headline,
-            category,
-            publish_time,
-            day_type,
-            resources["embedder"],
-            resources["feature_metadata"],
+    if preprocessing_components:
+        st.sidebar.success("✅ Preprocessing: Components loaded")
+        st.sidebar.info(
+            f"📈 Features: {len(preprocessing_components['feature_order'])}"
         )
+        st.sidebar.info("🛡️ Data leakage prevention: ON")
+    else:
+        st.sidebar.error("❌ Preprocessing components not loaded")
 
-        # Get available features in the model
-        model_features = resources["feature_names"]
-
-        if not model_features:
-            st.warning("No model features available. Using default prediction.")
-            return 0.01
-
-        # Match features (use available ones, fill missing with defaults)
-        final_features = []
-        for feat_name in model_features:
-            if feat_name in features_df.columns:
-                value = features_df[feat_name].iloc[0]
-                # Handle NaN values
-                if pd.isna(value):
-                    if "emb_" in feat_name:
-                        final_features.append(0.0)
-                    elif "category" in feat_name:
-                        final_features.append(0)
-                    else:
-                        final_features.append(0.0)
-                else:
-                    final_features.append(float(value))
-            else:
-                # Provide reasonable defaults for missing features
-                if "emb_" in feat_name:
-                    final_features.append(0.0)
-                elif "category" in feat_name:
-                    final_features.append(0)
-                elif "hour" in feat_name:
-                    final_features.append(12.0)  # Default to noon
-                elif "day" in feat_name:
-                    final_features.append(2.0)  # Default to Tuesday
-                else:
-                    final_features.append(0.0)
-
-        # Ensure we have the right number of features
-        if len(final_features) != len(model_features):
-            st.warning(
-                f"Feature mismatch: expected {len(model_features)}, got {len(final_features)}"
+    if search_system:
+        st.sidebar.success(
+            f"✅ Search: {search_system['metadata']['total_articles']:,} articles"
+        )
+        if search_system["metadata"].get("rewrite_variants", 0) > 0:
+            st.sidebar.info(
+                f"🔄 Rewrites: {search_system['metadata']['rewrite_variants']} variants"
             )
-            return 0.01
-
-        # Make prediction
-        if resources["model_type"] == "lightgbm":
-            prediction = resources["ctr_model"].predict([final_features])[0]
-        else:
-            # Fallback for other model types
-            prediction = 0.01  # Default prediction
-
-        # Handle NaN predictions
-        if pd.isna(prediction):
-            prediction = 0.01
-
-        return max(0, min(1, float(prediction)))  # Clamp between 0 and 1
-
-    except Exception as e:
-        st.error(f"Prediction error: {str(e)}")
-        return 0.01
-
-
-def get_ctr_insights(ctr_prediction, category, publish_time):
-    """Provide insights about the CTR prediction."""
-    insights = []
-
-    # Performance assessment
-    if ctr_prediction > 0.02:
-        insights.append(
-            "🚀 **High Performance** - This headline is predicted to perform well"
-        )
-    elif ctr_prediction > 0.01:
-        insights.append("📈 **Moderate Performance** - Decent engagement expected")
     else:
-        insights.append("📉 **Low Performance** - Consider optimizing this headline")
+        st.sidebar.error("❌ Search system not loaded")
 
-    # Time-based insights
-    hour = publish_time.hour
-    if 7 <= hour <= 9:
-        insights.append("☕ **Morning Commute** - Good time for news consumption")
-    elif 12 <= hour <= 14:
-        insights.append("🍽️ **Lunch Time** - Popular reading period")
-    elif 17 <= hour <= 19:
-        insights.append("🚗 **Evening Commute** - Peak engagement time")
-    elif 19 <= hour <= 23:
-        insights.append("📺 **Prime Time** - High attention period")
-
-    # Category insights
-    category_tips = {
-        "news": "📰 Breaking news and urgent updates perform best",
-        "sports": "⚽ Game results and player news drive engagement",
-        "entertainment": "🎬 Celebrity news and trending topics work well",
-        "finance": "💰 Market updates and investment advice are popular",
-        "lifestyle": "✨ How-to guides and tips generate interest",
-        "technology": "🔧 Product launches and reviews perform well",
-    }
-
-    if category.lower() in category_tips:
-        insights.append(category_tips[category.lower()])
-
-    return insights
-
-
-def cosine_sim(a, b):
-    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
-
-
-# Initialize Data
-with st.spinner("Loading models and data..."):
-    resources = load_resources()
-
-# Load header image
-img_dir = Path("images")
-if img_dir.exists():
-    all_images = list(img_dir.glob("*.jpg"))
-    if all_images:
-        selected = random.choice(all_images)
-        st.image(str(selected), width=600)
-
-st.title("📰 Agentic AI News Editor")
-st.markdown("*Enhanced with temporal intelligence and contextual features*")
-
-# Display pipeline status
-if not all(resources["status"].values()):
-    with st.expander("⚙️ Pipeline Status", expanded=True):
-        for stage, completed in resources["status"].items():
-            status_icon = "✅" if completed else "❌"
-            st.write(f"{status_icon} {stage.replace('_', ' ').title()}")
-
-# UI Tabs
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["🔍 Retrieve & Rank", "⚡ Predict CTR", "✍️ Rewrite Headlines", "📊 Analytics"]
-)
-
-with tab1:
-    st.header("🔍 Article Retrieval & Ranking")
-    st.markdown("Find similar articles using semantic search")
-
-    if not resources["status"]["embeddings_completed"]:
-        st.warning("⚠️ Embeddings not available. Please run embedding script first.")
+    if llm_rewriter.api_available:
+        st.sidebar.success("✅ AI Rewriter: Available")
     else:
-        col1, col2 = st.columns([3, 1])
+        st.sidebar.warning("⚠️ AI Rewriter: Offline mode")
+
+    # Main tabs
+    tab1, tab2, tab3, tab4 = st.tabs(
+        [
+            "🔮 Predict & Rewrite",
+            "🔍 Search Articles",
+            "📊 Rewrite Analysis",
+            "🏆 Top Articles",
+        ]
+    )
+
+    # Tab 1: Predict & Rewrite
+    with tab1:
+        st.header("Predict Engagement & Generate AI Rewrites")
+
+        col1, col2 = st.columns([3, 2])
 
         with col1:
-            query = st.text_input(
-                "Search Query:",
-                "big tech layoffs",
-                help="Enter keywords to find similar articles",
+            title = st.text_area(
+                "Article Title",
+                placeholder="Enter your article headline here...",
+                height=100,
+                help="Enter the headline you want to test and optimize",
             )
-        with col2:
-            k = st.slider("Top K results:", 1, 20, 5)
 
-        if st.button("🔍 Search Articles", type="primary"):
-            try:
-                # Generate query embedding
-                q_emb = resources["embedder"].encode([query]).astype("float32")
+            abstract = st.text_area(
+                "Abstract (Optional)",
+                placeholder="Enter article abstract...",
+                height=80,
+                help="Optional: Add abstract for better predictions",
+            )
 
-                # Handle dimension matching
-                index_dim = resources["index"].d
-                query_dim = q_emb.shape[1]
+            categories = [
+                "news",
+                "sports",
+                "finance",
+                "travel",
+                "lifestyle",
+                "video",
+                "foodanddrink",
+                "weather",
+                "autos",
+                "health",
+                "entertainment",
+                "tv",
+                "music",
+                "movies",
+                "kids",
+                "northamerica",
+                "middleeast",
+                "unknown",
+            ]
 
-                if query_dim != index_dim:
-                    if query_dim > index_dim:
-                        q_emb = q_emb[:, :index_dim]
-                        st.info(
-                            f"Adjusted embedding dimensions: {query_dim} → {index_dim}"
+            category = st.selectbox("Article Category", categories, index=0)
+
+            col_btn1, col_btn2 = st.columns(2)
+
+            with col_btn1:
+                predict_only = st.button("🎯 Predict Only", type="secondary")
+
+            with col_btn2:
+                predict_and_rewrite = st.button(
+                    "🤖 Predict & AI Rewrite", type="primary"
+                )
+
+            if predict_only or predict_and_rewrite:
+                if title.strip():
+                    with st.spinner("Analyzing your article..."):
+                        result = predict_engagement(
+                            title,
+                            abstract,
+                            category,
+                            model_pipeline,
+                            preprocessing_components,
                         )
-                    else:
-                        padding = np.zeros(
-                            (q_emb.shape[0], index_dim - query_dim), dtype=np.float32
-                        )
-                        q_emb = np.concatenate([q_emb, padding], axis=1)
 
-                # Search
-                D, I = resources["index"].search(q_emb, k)
+                    if result:
+                        # Display prediction results
+                        st.subheader("📊 Engagement Prediction")
 
-                if len(I[0]) > 0:
-                    # Create results
-                    results = []
-                    for i, (similarity_score, idx) in enumerate(zip(D[0], I[0])):
-                        if idx < len(resources["emb_data"]["article_indices"]):
-                            article_idx = resources["emb_data"]["article_indices"][idx]
-                            split_label = (
-                                resources["emb_data"]["split_labels"][idx]
-                                if idx < len(resources["emb_data"]["split_labels"])
-                                else "unknown"
+                        col_pred1, col_pred2, col_pred3, col_pred4 = st.columns(4)
+
+                        with col_pred1:
+                            engagement_status = (
+                                "🔥 High Engagement"
+                                if result["high_engagement"]
+                                else "📉 Low Engagement"
+                            )
+                            st.metric("Prediction", engagement_status)
+
+                        with col_pred2:
+                            st.metric(
+                                "Probability", f"{result['engagement_probability']:.1%}"
                             )
 
-                            results.append(
-                                {
-                                    "Rank": i + 1,
-                                    "Article_ID": f"Article_{article_idx}",
-                                    "Similarity": f"{float(similarity_score):.4f}",
-                                    "Dataset": split_label.title(),
-                                    "Relevance": (
-                                        "🔥 High"
-                                        if similarity_score < 0.5
-                                        else (
-                                            "📈 Medium"
-                                            if similarity_score < 1.0
-                                            else "📊 Low"
+                        with col_pred3:
+                            st.metric("Confidence", f"{result['confidence']:.1%}")
+
+                        with col_pred4:
+                            st.metric("Est. CTR", f"{result['estimated_ctr']:.4f}")
+
+                        # AI Rewriting section
+                        if predict_and_rewrite:
+                            st.subheader("🤖 AI-Powered Headline Rewrites")
+
+                            with st.spinner("Generating optimized headlines..."):
+                                article_data = {
+                                    "category": category,
+                                    "ctr": result[
+                                        "estimated_ctr"
+                                    ],  # Use model-predicted CTR
+                                    "readability": result["features"][
+                                        "title_reading_ease"
+                                    ],
+                                    "abstract": abstract,
+                                }
+
+                                rewrite_result = llm_rewriter.get_best_rewrite(
+                                    title, article_data
+                                )
+
+                            if (
+                                rewrite_result
+                                and rewrite_result["best_rewrite"] != title
+                            ):
+                                # Show best rewrite
+                                st.success("✨ Optimized Headline Generated")
+
+                                col_orig, col_new = st.columns(2)
+
+                                with col_orig:
+                                    st.write("**Original:**")
+                                    st.info(title)
+
+                                with col_new:
+                                    st.write("**AI Optimized:**")
+                                    st.success(rewrite_result["best_rewrite"])
+
+                                # Show improvement metrics
+                                if "improvement_metrics" in rewrite_result:
+                                    metrics = rewrite_result["improvement_metrics"]
+
+                                    st.write("**Improvement Analysis:**")
+                                    col_met1, col_met2, col_met3 = st.columns(3)
+
+                                    with col_met1:
+                                        st.metric(
+                                            "Quality Score",
+                                            f"{metrics.get('overall_quality_score', 0):.0f}/100",
                                         )
-                                    ),
+
+                                    with col_met2:
+                                        st.metric(
+                                            "Readability Δ",
+                                            f"{metrics.get('readability_improvement', 0):+.1f}",
+                                        )
+
+                                    with col_met3:
+                                        st.metric(
+                                            "Est. CTR Boost",
+                                            f"{metrics.get('predicted_ctr_improvement', 0):+.4f}",
+                                        )
+
+                                # Show all variants
+                                if "all_variants" in rewrite_result:
+                                    st.write("**All Strategy Variants:**")
+                                    for strategy, variant in rewrite_result[
+                                        "all_variants"
+                                    ].items():
+                                        if variant != title:
+                                            st.write(
+                                                f"• **{strategy.title()}:** {variant}"
+                                            )
+
+                            else:
+                                st.info(
+                                    "No significant improvements suggested for this headline"
+                                )
+
+                        # Feature Analysis
+                        st.subheader("📈 Feature Analysis")
+                        features = result["features"]
+
+                        col_feat1, col_feat2 = st.columns(2)
+
+                        with col_feat1:
+                            st.write("**Title Characteristics:**")
+                            st.write(f"• Length: {features['title_length']} characters")
+                            st.write(
+                                f"• Word count: {features['title_word_count']} words"
+                            )
+                            st.write(
+                                f"• Reading ease: {features['title_reading_ease']:.1f}"
+                            )
+                            st.write(
+                                f"• Has question: {'Yes' if features['has_question'] else 'No'}"
+                            )
+                            st.write(
+                                f"• Has numbers: {'Yes' if features['has_number'] else 'No'}"
+                            )
+
+                        with col_feat2:
+                            st.write("**Engagement Factors:**")
+                            st.write(
+                                f"• Exclamation: {'Yes' if features['has_exclamation'] else 'No'}"
+                            )
+                            st.write(
+                                f"• Colon: {'Yes' if features['has_colon'] else 'No'}"
+                            )
+                            st.write(
+                                f"• Quotes: {'Yes' if features['has_quotes'] else 'No'}"
+                            )
+                            st.write(f"• Capital words: {features['title_caps_words']}")
+                            st.write(
+                                f"• Abstract: {'Yes' if features['has_abstract'] else 'No'}"
+                            )
+
+                    else:
+                        st.error(
+                            "Failed to predict engagement. Please check your inputs."
+                        )
+                else:
+                    st.warning("Please enter an article title.")
+
+        with col2:
+            # Tips and guidelines
+            st.subheader("💡 Editorial Guidelines")
+            st.write("**High-engagement headlines:**")
+            st.write("• 8-12 words optimal")
+            st.write("• Include numbers/questions")
+            st.write("• High readability (60+ score)")
+            st.write("• Front-load key information")
+            st.write("• Under 75 characters")
+
+            st.subheader("📝 Examples")
+            st.write("**High Engagement:**")
+            st.code("5 Ways AI Will Transform Healthcare")
+            st.code("Why Tesla Stock Dropped 15% Today")
+
+            st.write("**Low Engagement:**")
+            st.code("Technology Report Published")
+            st.code("General Business Update Information")
+
+    # Tab 2: Search Articles
+    with tab2:
+        st.header("Search Articles & Rewrite Variants")
+
+        search_query = st.text_input(
+            "Search Query",
+            placeholder="Enter keywords or describe the topic...",
+            help="Search through articles and their rewrite variants",
+        )
+
+        col_search1, col_search2 = st.columns(2)
+
+        with col_search1:
+            num_results = st.slider("Number of results", 5, 20, 10)
+
+        with col_search2:
+            include_rewrites = st.checkbox("Include rewrite variants", value=True)
+
+        if st.button("🔍 Search", type="primary"):
+            if search_query.strip():
+                with st.spinner("Searching articles..."):
+                    # Search function (simplified)
+                    embedder = load_embedder()
+                    query_embedding = embedder.encode([search_query])
+                    query_embedding = query_embedding.astype(np.float32)
+                    faiss.normalize_L2(query_embedding)
+
+                    search_k = num_results * 3 if include_rewrites else num_results
+                    distances, indices = search_system["index"].search(
+                        query_embedding, search_k
+                    )
+
+                    results = []
+                    for dist, idx in zip(distances[0], indices[0]):
+                        if idx in search_system["mappings"]["idx_to_article_id"]:
+                            article_id = search_system["mappings"]["idx_to_article_id"][
+                                idx
+                            ]
+                            if article_id in search_system["article_lookup"]:
+                                article_info = search_system["article_lookup"][
+                                    article_id
+                                ].copy()
+                                article_info["similarity_score"] = float(dist)
+                                article_info["newsID"] = article_id
+
+                                if (
+                                    not include_rewrites
+                                    and article_info.get("dataset") == "rewrite_variant"
+                                ):
+                                    continue
+
+                                results.append(article_info)
+
+                                if len(results) >= num_results:
+                                    break
+
+                if results:
+                    st.subheader(f"📰 Found {len(results)} articles")
+
+                    for i, article in enumerate(results, 1):
+                        with st.expander(f"{i}. {article['title'][:70]}..."):
+                            col_art1, col_art2 = st.columns([3, 1])
+
+                            with col_art1:
+                                st.write(f"**Title:** {article['title']}")
+                                if article.get("abstract"):
+                                    abstract_preview = (
+                                        article["abstract"][:200] + "..."
+                                        if len(article["abstract"]) > 200
+                                        else article["abstract"]
+                                    )
+                                    st.write(f"**Abstract:** {abstract_preview}")
+
+                            with col_art2:
+                                st.metric(
+                                    "Similarity", f"{article['similarity_score']:.3f}"
+                                )
+                                st.write(f"**Category:** {article['category']}")
+                                st.write(f"**Dataset:** {article['dataset']}")
+
+                                if article.get("dataset") == "rewrite_variant":
+                                    st.write(
+                                        f"**Strategy:** {article.get('rewrite_strategy', 'N/A')}"
+                                    )
+                                    st.write(
+                                        f"**Quality:** {article.get('quality_score', 'N/A')}"
+                                    )
+
+                                if not pd.isna(article.get("ctr")):
+                                    st.write(f"**CTR:** {article['ctr']:.4f}")
+
+                                if not pd.isna(article.get("high_engagement")):
+                                    engagement_status = (
+                                        "🔥 High"
+                                        if article["high_engagement"]
+                                        else "📉 Low"
+                                    )
+                                    st.write(f"**Engagement:** {engagement_status}")
+                else:
+                    st.info("No articles found. Try different keywords.")
+            else:
+                st.warning("Please enter a search query.")
+
+    # Tab 3: Rewrite Analysis
+    with tab3:
+        st.header("Headline Rewrite Analysis")
+
+        if search_system and search_system["metadata"].get("rewrite_analysis"):
+            rewrite_stats = search_system["metadata"]["rewrite_analysis"]
+
+            st.subheader("📊 Rewrite Performance Summary")
+
+            col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+
+            with col_stat1:
+                st.metric(
+                    "Headlines Analyzed", rewrite_stats.get("unique_originals", 0)
+                )
+
+            with col_stat2:
+                st.metric("Variants Generated", rewrite_stats.get("total_rewrites", 0))
+
+            with col_stat3:
+                st.metric(
+                    "Best Strategy",
+                    rewrite_stats.get("best_performing_strategy_by_model", "N/A"),
+                )
+
+            with col_stat4:
+                model_used = rewrite_stats.get("model_based_ctr_used", False)
+                st.metric("Model CTR", "✅ Yes" if model_used else "❌ No")
+
+            # Load detailed rewrite results if available
+            rewrite_file = FAISS_DIR / "rewrite_analysis" / "headline_rewrites.parquet"
+            if rewrite_file.exists():
+                try:
+                    rewrite_df = pd.read_parquet(rewrite_file)
+
+                    st.subheader("📈 Strategy Performance")
+
+                    # Strategy comparison
+                    if "model_ctr_improvement" in rewrite_df.columns:
+                        strategy_performance = (
+                            rewrite_df.groupby("strategy")
+                            .agg(
+                                {
+                                    "quality_score": "mean",
+                                    "readability_improvement": "mean",
+                                    "model_ctr_improvement": "mean",
                                 }
                             )
-
-                    if results:
-                        st.success(f"✅ Found {len(results)} similar articles")
-
-                        # Display results in a nice format
-                        results_df = pd.DataFrame(results)
-                        st.dataframe(
-                            results_df, use_container_width=True, hide_index=True
+                            .round(4)
                         )
 
-                        # Show statistics
-                        avg_similarity = np.mean(
-                            [float(r["Similarity"]) for r in results]
+                        # Create performance chart with model-based improvements
+                        fig = px.bar(
+                            strategy_performance.reset_index(),
+                            x="strategy",
+                            y="model_ctr_improvement",
+                            title="Average Model-Based CTR Improvement by Strategy",
                         )
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("🎯 Avg Similarity", f"{avg_similarity:.4f}")
-                        with col2:
-                            st.metric("📊 Results Found", len(results))
-                        with col3:
-                            st.metric("🔍 Query Terms", len(query.split()))
+                        st.plotly_chart(fig, use_container_width=True)
                     else:
-                        st.error("❌ No valid results found")
-                else:
-                    st.error("❌ No results found for this query")
-
-            except Exception as e:
-                st.error(f"❌ Search failed: {str(e)}")
-
-with tab2:
-    st.header("⚡ Advanced CTR Prediction")
-    st.markdown("Get precise CTR estimates with contextual intelligence")
-
-    if not resources["status"]["training_completed"]:
-        st.warning("⚠️ CTR model not available. Please run training script first.")
-    else:
-        # Enhanced input form
-        with st.form("ctr_prediction_form"):
-            st.subheader("📝 Headline Details")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                headline = st.text_input(
-                    "Headline Text:",
-                    placeholder="Enter your headline here...",
-                    help="The headline you want to analyze",
-                )
-
-                category = st.selectbox(
-                    "📂 Category:",
-                    [
-                        "news",
-                        "sports",
-                        "entertainment",
-                        "finance",
-                        "lifestyle",
-                        "technology",
-                    ],
-                    help="Select the content category",
-                )
-
-            with col2:
-                publish_time = st.time_input(
-                    "🕐 Publish Time:",
-                    value=datetime.time(12, 0),
-                    help="When will this be published?",
-                )
-
-                day_type = st.radio(
-                    "📅 Day Type:",
-                    ["Weekday", "Weekend"],
-                    help="Affects reader behavior patterns",
-                )
-
-            predict_btn = st.form_submit_button("🚀 Predict CTR", type="primary")
-
-        if predict_btn and headline:
-            # Create datetime object for prediction
-            current_date = datetime.datetime.now().date()
-            publish_datetime = datetime.datetime.combine(current_date, publish_time)
-
-            # Make prediction
-            with st.spinner("🔮 Analyzing headline..."):
-                ctr_prediction = predict_ctr_enhanced(
-                    headline, category, publish_datetime, day_type, resources
-                )
-
-            # Display results
-            st.markdown("---")
-            st.subheader("📊 Prediction Results")
-
-            # Main metrics
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.metric(
-                    "🎯 Predicted CTR",
-                    f"{ctr_prediction:.3%}",
-                    help="Expected click-through rate",
-                )
-
-            with col2:
-                # Calculate relative performance
-                baseline_ctr = resources["train_targets"]["ctr"].mean()
-                improvement = ((ctr_prediction - baseline_ctr) / baseline_ctr) * 100
-                st.metric(
-                    "📈 vs Baseline",
-                    f"{improvement:+.1f}%",
-                    delta=f"{improvement:+.1f}%",
-                    help="Performance vs average headline",
-                )
-
-            with col3:
-                # Estimated clicks per 1000 impressions
-                clicks_per_1k = ctr_prediction * 1000
-                st.metric(
-                    "👆 Clicks/1K Views",
-                    f"{clicks_per_1k:.1f}",
-                    help="Expected clicks per 1000 impressions",
-                )
-
-            # Insights
-            st.subheader("💡 AI Insights")
-            insights = get_ctr_insights(ctr_prediction, category, publish_datetime)
-            for insight in insights:
-                st.markdown(f"• {insight}")
-
-            # Feature analysis
-            with st.expander("🔍 Feature Analysis"):
-                features_df = extract_enhanced_features(
-                    headline,
-                    category,
-                    publish_datetime,
-                    day_type,
-                    resources["embedder"],
-                    resources["feature_metadata"],
-                )
-
-                # Show key features
-                key_features = {
-                    "Title Length": features_df["title_length"].iloc[0],
-                    "Word Count": features_df["title_word_count"].iloc[0],
-                    "Readability Score": f"{features_df['title_reading_ease'].iloc[0]:.1f}",
-                    "Hour": features_df["hour"].iloc[0],
-                    "Has Question": (
-                        "Yes" if features_df["has_question"].iloc[0] else "No"
-                    ),
-                    "Has Numbers": "Yes" if features_df["has_number"].iloc[0] else "No",
-                    "Breaking News": (
-                        "Yes" if features_df["is_breaking_news"].iloc[0] else "No"
-                    ),
-                }
-
-                for feature, value in key_features.items():
-                    st.markdown(f"**{feature}:** {value}")
-
-        # Reference statistics
-        st.markdown("---")
-        st.subheader("📋 Reference Statistics")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("**🔎 Dataset Statistics**")
-            train_ctr_mean = resources["train_targets"]["ctr"].mean()
-            train_ctr_with_impressions = resources["train_targets"][
-                resources["train_targets"]["ctr"] > 0
-            ]["ctr"]
-
-            st.metric("Overall Mean CTR", f"{train_ctr_mean:.3%}")
-            if len(train_ctr_with_impressions) > 0:
-                st.metric(
-                    "Mean CTR (with clicks)", f"{train_ctr_with_impressions.mean():.3%}"
-                )
-
-        with col2:
-            st.markdown("**⏰ Best Publishing Times**")
-            st.markdown("• **Morning**: 7-9 AM (commute)")
-            st.markdown("• **Lunch**: 12-2 PM (break time)")
-            st.markdown("• **Evening**: 5-7 PM (commute)")
-            st.markdown("• **Prime**: 7-11 PM (leisure)")
-
-with tab3:
-    st.header("✍️ AI-Powered Headline Rewriting")
-    st.markdown("Generate optimized headlines using GPT-4")
-
-    if not resources["status"]["training_completed"]:
-        st.warning("⚠️ CTR model not available. Please run training script first.")
-    else:
-        # Input form
-        with st.form("headline_rewriting_form"):
-            st.subheader("📝 Original Headline")
-
-            col1, col2 = st.columns([3, 1])
-
-            with col1:
-                original = st.text_input(
-                    "Original Headline:",
-                    placeholder="Enter the headline you want to improve...",
-                    help="The headline you want to optimize",
-                )
-
-            with col2:
-                n_variations = st.slider("Variations:", 1, 5, 3)
-
-            st.subheader("🔑 OpenAI Configuration")
-            openai_key = st.text_input(
-                "OpenAI API Key:",
-                type="password",
-                help="Your OpenAI API key for GPT-4 access",
-            )
-
-            # Context settings
-            col1, col2 = st.columns(2)
-            with col1:
-                rewrite_category = st.selectbox(
-                    "Category:",
-                    [
-                        "news",
-                        "sports",
-                        "entertainment",
-                        "finance",
-                        "lifestyle",
-                        "technology",
-                    ],
-                )
-
-            with col2:
-                optimization_focus = st.selectbox(
-                    "Optimization Focus:",
-                    [
-                        "Click-through Rate",
-                        "Readability",
-                        "Emotional Appeal",
-                        "Urgency",
-                        "Curiosity",
-                    ],
-                )
-
-            rewrite_btn = st.form_submit_button(
-                "✨ Generate Variations", type="primary"
-            )
-
-        if rewrite_btn and original and openai_key:
-            try:
-                # Set up OpenAI
-                client = openai.OpenAI(api_key=openai_key)
-
-                # Create focused instructions based on optimization focus
-                focus_instructions = {
-                    "Click-through Rate": "Focus on creating headlines that maximize click-through rates with compelling hooks and curiosity gaps.",
-                    "Readability": "Prioritize clarity and easy-to-understand language with high readability scores.",
-                    "Emotional Appeal": "Use emotional triggers and power words that resonate with readers.",
-                    "Urgency": "Create a sense of urgency and timeliness that compels immediate action.",
-                    "Curiosity": "Build curiosity gaps that make readers want to learn more.",
-                }
-
-                detailed_instructions = f"""
-You are an expert news editor optimizing headlines for {rewrite_category} content.
-
-OPTIMIZATION FOCUS: {focus_instructions[optimization_focus]}
-
-Guidelines:
-1. Preserve factual accuracy and key information
-2. Keep headlines under 70 characters for optimal display
-3. Maintain semantic similarity to the original
-4. Use power words and emotional triggers appropriately
-5. Consider the target category: {rewrite_category}
-
-Original headline: {original}
-
-Generate {n_variations} improved variations, each on a separate line:
-"""
-
-                with st.spinner("🤖 Generating optimized headlines..."):
-                    response = client.chat.completions.create(
-                        model="gpt-4",
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are an expert headline optimizer.",
-                            },
-                            {"role": "user", "content": detailed_instructions},
-                        ],
-                        temperature=0.7,
-                        max_tokens=500,
-                    )
-
-                    # Extract candidates
-                    text = response.choices[0].message.content.strip()
-                    candidates = [
-                        line.strip("- ").strip()
-                        for line in text.splitlines()
-                        if line.strip() and not line.startswith("Generate")
-                    ][:n_variations]
-
-                if candidates:
-                    st.markdown("---")
-                    st.subheader("📊 Headline Analysis")
-
-                    # Analyze original headline
-                    current_time = datetime.datetime.now()
-                    orig_ctr = predict_ctr_enhanced(
-                        original, rewrite_category, current_time, "Weekday", resources
-                    )
-                    orig_emb = resources["embedder"].encode([original])[0]
-
-                    # Analyze all candidates
-                    results = []
-                    for i, candidate in enumerate(candidates, 1):
-                        ctr_pred = predict_ctr_enhanced(
-                            candidate,
-                            rewrite_category,
-                            current_time,
-                            "Weekday",
-                            resources,
-                        )
-                        readability = (
-                            flesch_reading_ease(candidate) if candidate.strip() else 0
-                        )
-                        similarity = cosine_sim(
-                            orig_emb, resources["embedder"].encode([candidate])[0]
+                        strategy_performance = (
+                            rewrite_df.groupby("strategy")
+                            .agg(
+                                {
+                                    "quality_score": "mean",
+                                    "readability_improvement": "mean",
+                                    "predicted_ctr_improvement": "mean",
+                                }
+                            )
+                            .round(3)
                         )
 
-                        results.append(
-                            {
-                                "Rank": i,
-                                "Headline": candidate,
-                                "CTR": ctr_pred,
-                                "CTR_Display": f"{ctr_pred:.2%}",
-                                "Readability": f"{readability:.1f}",
-                                "Similarity": f"{similarity:.2f}",
-                                "Length": len(candidate),
-                                "Improvement": f"{((ctr_pred - orig_ctr) / orig_ctr * 100):+.1f}%",
-                            }
+                        # Create performance chart
+                        fig = px.bar(
+                            strategy_performance.reset_index(),
+                            x="strategy",
+                            y="quality_score",
+                            title="Average Quality Score by Strategy",
                         )
+                        st.plotly_chart(fig, use_container_width=True)
 
-                    # Sort by CTR
-                    results.sort(key=lambda x: x["CTR"], reverse=True)
+                    # Show detailed results
+                    st.subheader("🔍 Detailed Results")
 
-                    # Display original vs best
-                    best_ctr = results[0]["CTR"]
-                    improvement = ((best_ctr - orig_ctr) / orig_ctr) * 100
-
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("📄 Original CTR", f"{orig_ctr:.2%}")
-                    with col2:
-                        st.metric("🚀 Best Variation CTR", f"{best_ctr:.2%}")
-                    with col3:
-                        st.metric(
-                            "📈 Improvement",
-                            f"{improvement:+.1f}%",
-                            delta=f"{improvement:+.1f}%",
-                        )
-
-                    # Display results table
-                    st.subheader("🏆 Ranked Headlines")
-
-                    display_df = pd.DataFrame(results)[
-                        [
-                            "Rank",
-                            "Headline",
-                            "CTR_Display",
-                            "Readability",
-                            "Similarity",
-                            "Length",
-                            "Improvement",
-                        ]
-                    ]
-                    display_df.columns = [
-                        "Rank",
-                        "Headline",
-                        "CTR",
-                        "Readability",
-                        "Similarity",
-                        "Length",
-                        "vs Original",
+                    display_columns = [
+                        "original_title",
+                        "strategy",
+                        "rewritten_title",
+                        "quality_score",
+                        "readability_improvement",
+                        "predicted_ctr_improvement",
                     ]
 
-                    # Color code the best result
-                    st.dataframe(display_df, use_container_width=True, hide_index=True)
+                    # Add model CTR improvement if available
+                    if "model_ctr_improvement" in rewrite_df.columns:
+                        display_columns.append("model_ctr_improvement")
+                        display_columns.append("original_ctr")
+                        display_columns.append("rewritten_ctr")
 
-                    # Show usage info
-                    st.info(f"💰 OpenAI tokens used: {response.usage.total_tokens}")
+                    available_columns = [
+                        col for col in display_columns if col in rewrite_df.columns
+                    ]
 
-                    # Best headline recommendation
-                    st.markdown("---")
-                    st.subheader("🎯 Recommendation")
-                    best_headline = results[0]
-                    st.success(
-                        f"**Best Performing Headline:** {best_headline['Headline']}"
-                    )
-                    st.markdown(
-                        f"**Expected Performance:** {best_headline['CTR_Display']} CTR ({best_headline['Improvement']} improvement)"
+                    st.dataframe(
+                        rewrite_df[available_columns].head(20), use_container_width=True
                     )
 
-            except Exception as e:
-                st.error(f"❌ Error generating headlines: {str(e)}")
+                except Exception as e:
+                    st.error(f"Error loading rewrite analysis: {e}")
 
-with tab4:
-    st.header("📊 Model Analytics")
-    st.markdown("Performance insights and model information")
-
-    # Model information
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("🤖 Model Information")
-        st.markdown(
-            f"**Model Type:** {resources['model_type'].title() if resources['model_type'] else 'Unknown'}"
-        )
-        st.markdown(
-            f"**Features Used:** {len(resources['feature_names']) if resources['feature_names'] else 'Unknown'}"
-        )
-        st.markdown(f"**Training Samples:** {len(resources['train_targets']):,}")
-
-        # Feature importance (if available)
-        if hasattr(resources["ctr_model"], "feature_importances_"):
-            st.subheader("🎯 Top Features")
-            importances = resources["ctr_model"].feature_importances_
-            feature_importance = (
-                pd.DataFrame(
-                    {
-                        "Feature": resources["feature_names"][: len(importances)],
-                        "Importance": importances,
-                    }
+            else:
+                st.info(
+                    "Detailed rewrite analysis not available. Run the FAISS index creation script to generate analysis."
                 )
-                .sort_values("Importance", ascending=False)
-                .head(10)
+
+        else:
+            st.info(
+                "No rewrite analysis available. The system may be running in offline mode."
             )
 
-            st.bar_chart(feature_importance.set_index("Feature")["Importance"])
+    # Tab 4: Top Articles
+    with tab4:
+        st.header("Top Performing Articles")
 
-    with col2:
-        st.subheader("📈 Dataset Statistics")
+        if search_system:
+            # Get high engagement articles
+            high_engagement_articles = []
+            for newsid, info in search_system["article_lookup"].items():
+                if (
+                    pd.notna(info.get("high_engagement"))
+                    and info["high_engagement"] == 1
+                ):
+                    high_engagement_articles.append(
+                        {
+                            "newsID": newsid,
+                            "title": info["title"],
+                            "category": info["category"],
+                            "ctr": info.get("ctr", 0),
+                            "dataset": info["dataset"],
+                            "abstract": info.get("abstract", ""),
+                        }
+                    )
 
-        # CTR distribution
-        ctr_data = resources["train_targets"]["ctr"]
+            high_engagement_articles.sort(key=lambda x: x["ctr"], reverse=True)
 
-        st.markdown
+            if high_engagement_articles:
+                st.subheader(
+                    f"🏆 Top {min(20, len(high_engagement_articles))} High-Engagement Articles"
+                )
+
+                # Filter options
+                col_filter1, col_filter2 = st.columns(2)
+
+                with col_filter1:
+                    available_categories = sorted(
+                        list(set(art["category"] for art in high_engagement_articles))
+                    )
+                    selected_categories = st.multiselect(
+                        "Filter by Category", options=available_categories, default=[]
+                    )
+
+                with col_filter2:
+                    selected_datasets = st.multiselect(
+                        "Filter by Dataset",
+                        options=["train", "val", "test"],
+                        default=["train", "val"],
+                    )
+
+                # Apply filters
+                filtered_articles = high_engagement_articles
+                if selected_categories:
+                    filtered_articles = [
+                        art
+                        for art in filtered_articles
+                        if art["category"] in selected_categories
+                    ]
+                if selected_datasets:
+                    filtered_articles = [
+                        art
+                        for art in filtered_articles
+                        if art["dataset"] in selected_datasets
+                    ]
+
+                # Display top articles
+                st.write(f"Showing top {min(20, len(filtered_articles))} articles:")
+
+                for i, article in enumerate(filtered_articles[:20], 1):
+                    with st.expander(f"{i}. [{article['ctr']:.4f}] {article['title']}"):
+                        col_top1, col_top2 = st.columns([3, 1])
+
+                        with col_top1:
+                            st.write(f"**Title:** {article['title']}")
+                            if article["abstract"]:
+                                abstract_preview = (
+                                    article["abstract"][:300] + "..."
+                                    if len(article["abstract"]) > 300
+                                    else article["abstract"]
+                                )
+                                st.write(f"**Abstract:** {abstract_preview}")
+
+                        with col_top2:
+                            st.metric("CTR", f"{article['ctr']:.4f}")
+                            st.write(f"**Category:** {article['category']}")
+                            st.write(f"**Dataset:** {article['dataset']}")
+                            st.write(f"**ID:** {article['newsID']}")
+
+            else:
+                st.info("No high-engagement articles found in the dataset.")
+
+        else:
+            st.error("Top articles not available.")
+
+    # Footer
+    st.markdown("---")
+    st.markdown(
+        "**Article Engagement Predictor & AI Rewriter** | Built with Streamlit, XGBoost, and OpenAI"
+    )
+
+    # Enhanced sidebar info
+    if model_pipeline:
+        st.sidebar.markdown("---")
+        st.sidebar.header("📋 Model Details")
+        st.sidebar.write(f"**Type:** {model_pipeline['model_name']}")
+
+        if "performance" in model_pipeline:
+            perf = model_pipeline["performance"]
+            if "auc" in perf:
+                st.sidebar.write(f"**AUC:** {perf['auc']:.4f}")
+            if "ctr_gain_achieved" in perf:
+                st.sidebar.write(f"**CTR Gain:** {perf['ctr_gain_achieved']:.4f}")
+
+    if search_system:
+        st.sidebar.markdown("---")
+        st.sidebar.header("🔍 Search Index")
+        metadata = search_system["metadata"]
+        st.sidebar.write(f"**Articles:** {metadata['total_articles']:,}")
+        if metadata.get("rewrite_variants", 0) > 0:
+            st.sidebar.write(f"**Rewrites:** {metadata['rewrite_variants']:,}")
+
+        # Show model integration status
+        model_integration = metadata.get("model_integration", {})
+        model_available = model_integration.get("model_available", False)
+        st.sidebar.write(
+            f"**Model Integration:** {'✅ Yes' if model_available else '❌ No'}"
+        )
+
+    if preprocessing_components:
+        st.sidebar.markdown("---")
+        st.sidebar.header("🛡️ Data Integrity")
+        st.sidebar.write("**Leakage Prevention:** Active")
+        st.sidebar.write("**Features:** Publication-time only")
+        excluded_features = (
+            preprocessing_components.get("preprocessing_metadata", {})
+            .get("data_leakage_prevention", {})
+            .get("excluded_features", [])
+        )
+        if excluded_features:
+            st.sidebar.write(f"**Excluded:** {', '.join(excluded_features)}")
+
+
+if __name__ == "__main__":
+    main()
