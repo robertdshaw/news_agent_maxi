@@ -1,35 +1,28 @@
-# ── Python environment & secrets ───────────────────────────────────────────────
+# ── 1. Python env & secrets ─────────────────────────────────────────────────
 /venv/
 /.env
 .config/
 /.emergency_save/
 /.preprocess_EDA_fe/
 
-# ── Repo metadata & notebooks ─────────────────────────────────────────────────
-# Jupyter outputs
+# ── 2. Notebooks & progress logs ────────────────────────────────────────────
 .EDA_3.ipynb
-
-# ── Progress logs & intermediate data ─────────────────────────────────────────
 /df_train_progress.parquet
 /df_test_progress.parquet
 /df_val_progress.parquet
 
-# ── Source & generated data you can rebuild ──────────────────────────────────
+# ── 3. Generated or rebuildable data ────────────────────────────────────────
 /source_data/
 /preprocessed_data/
 /upworthy_data/
 /model_output/
 /images/
 
-# ── Ignore all pickle files by default (will be re-included below) ───────────
-*.pkl
-
-# ── Now ignore everything under data/, then un-ignore processed_data ─────────
+# ── 4. Ignore everything under data/ ────────────────────────────────────────
 /data/**
 
-# keep the folder itself
+# ── 5. Exception: track the entire processed_data folder ────────────────────
 !/data/preprocessed/processed_data/
-# keep all files & subfolders under processed_data
 !/data/preprocessed/processed_data/**
 
-# ── End of .gitignore ─────────────────────────────────────────────────────────
+# ── End of .gitignore ───────────────────────────────────────────────────────
