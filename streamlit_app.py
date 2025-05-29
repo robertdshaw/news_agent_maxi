@@ -398,7 +398,7 @@ def main():
     preprocessing_components = load_preprocessing_components()
 
     # Header
-    st.title("📰 AI-Assisted Headline Analysis & Search")
+    st.title("📰 AI-Assisted Headline Hunterpu")
     st.markdown(
         "**Predict engagement and optimize headlines with AI-powered rewriting**"
     )
