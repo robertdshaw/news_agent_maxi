@@ -1,6 +1,6 @@
 /source_data/*
 /venv/*
-/preprocessed_data/*
+# /preprocessed_data/*
 /data/*
 /images/*
 /.env/*
