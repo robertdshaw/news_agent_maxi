@@ -1,3 +1,24 @@
+# 1) ignore everything under data…
+/data/**
+
+# 2) but keep the data folder itself in the index
+!/data/
+
+# 3) ignore everything under data/preprocessed…
+/data/preprocessed/**
+
+# 4) but keep that folder in the index
+!/data/preprocessed/
+
+# 5) ignore everything under processed_data…
+/data/preprocessed/processed_data/**
+
+# 6) keep the folder in the index
+!/data/preprocessed/processed_data/
+
+# 7) finally, un-ignore just your metadata file
+!/data/preprocessed/processed_data/preprocessing_metadata.json
+
 /source_data/*
 /venv/*
 /preprocessed_data/*
