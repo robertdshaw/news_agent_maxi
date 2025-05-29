@@ -24,18 +24,19 @@ class LLMHeadlineRewriter:
     def _load_editorial_guidelines(self):
         """Load editorial guidelines based on EDA preprocessing findings"""
         return {
-            "target_reading_ease": 60,
-            "optimal_word_count": (8, 12),
-            "max_title_length": 75,
-            "high_engagement_threshold": 0.05,
+            "target_reading_ease": 60,  # From EDA: higher readability correlates with engagement
+            "optimal_word_count": (8, 12),  # From EDA: sweet spot for engagement
+            "max_title_length": 75,  # Character limit for optimal performance
+            "high_engagement_threshold": 0.15,  # CTR threshold from preprocessing
             "engagement_features": {
-                "questions": 0.15,
-                "numbers": 0.20,
-                "colons": 0.10,
-                "quotes": 0.08,
-                "exclamation": 0.05,
+                "questions": 0.15,  # Weight based on EDA correlation analysis
+                "numbers": 0.20,  # Strong predictor from feature importance
+                "colons": 0.10,  # Moderate engagement boost
+                "quotes": 0.08,  # Slight positive correlation
+                "exclamation": 0.05,  # Use sparingly
             },
             "category_performance": {
+                # Based on EDA category analysis - top performing categories
                 "sports": {"avg_ctr": 0.045, "high_engagement_rate": 0.18},
                 "entertainment": {"avg_ctr": 0.042, "high_engagement_rate": 0.16},
                 "finance": {"avg_ctr": 0.038, "high_engagement_rate": 0.14},
