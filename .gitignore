@@ -13,8 +13,6 @@
 
 # ── 3. Generated or rebuildable data ────────────────────────────────────────
 /source_data/
-/preprocessed_data/
-/upworthy_data/
 /model_output/
 /images/
 
