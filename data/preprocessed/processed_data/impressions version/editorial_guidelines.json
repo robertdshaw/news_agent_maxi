@@ -1,0 +1,31 @@
+{
+  "engagement_thresholds": {
+    "filter_out": 0.4,
+    "consider": 0.6,
+    "prioritize": 0.7,
+    "high_confidence": 0.8
+  },
+  "recommendation_logic": {
+    "filter_out": "Low engagement probability - consider for removal",
+    "consider": "Medium engagement - review for potential",
+    "prioritize": "High engagement - promote prominently",
+    "high_confidence": "Very high engagement - feature immediately"
+  },
+  "class_weight_info": {
+    "scale_pos_weight": 2.33,
+    "explanation": "Model biased toward identifying high-engagement content",
+    "effect": "Reduces false negatives (missing viral content)"
+  },
+  "editorial_workflow": {
+    "step_1": "Apply engagement probability filter",
+    "step_2": "Review topic-specific performance",
+    "step_3": "Consider user context and timing",
+    "step_4": "Apply editorial judgment"
+  },
+  "model_performance": {
+    "validation_auc": 0.693,
+    "deployment_ready": true,
+    "concept_drift_detected": true,
+    "last_retrain_recommended": "When AUC drops below 0.65"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "dataset_summary": {
+    "total_articles": 57022,
+    "train_articles": 23547,
+    "val_articles": 6997,
+    "test_articles": 26478,
+    "features": 396,
+    "embedding_dimensions": 384
+  },
+  "class_balance": {
+    "negative_samples": 16483,
+    "positive_samples": 7064,
+    "imbalance_ratio": 2.33,
+    "balance_method": "scale_pos_weight"
+  },
+  "data_quality_checks": {
+    "missing_values": "Handled with fillna(0)",
+    "feature_variance": "Low variance features removed",
+    "concept_drift": "Detected and monitored",
+    "time_splits": "Chronological train/val/test"
+  },
+  "model_validation": {
+    "time_aware_cv": true,
+    "validation_auc": 0.693,
+    "performance_stability": 0.047,
+    "deployment_ready": true
+  },
+  "recommendations": [
+    "Monitor concept drift monthly",
+    "Retrain when AUC drops below 0.65",
+    "Track actual vs predicted engagement rates",
+    "Update class weights if imbalance changes"
+  ]
+}
