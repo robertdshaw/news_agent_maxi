@@ -7,8 +7,16 @@ try:
 except Exception:
     pass
 
-import os, streamlit as st, json
+import streamlit as st, json
 from pathlib import Path
+
+# Page configuration
+st.set_page_config(
+    page_title="Article Engagement Predictor & Rewriter",
+    page_icon="📰",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 # 1) Show working directory and root contents
 st.write("ℹ️ PWD:", os.getcwd())
@@ -52,14 +60,6 @@ import warnings
 from llm_rewriter import LLMHeadlineRewriter
 
 warnings.filterwarnings("ignore")
-
-# Page configuration
-st.set_page_config(
-    page_title="Article Engagement Predictor & Rewriter",
-    page_icon="📰",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
 # Constants
 MODEL_DIR = Path("model_output")
