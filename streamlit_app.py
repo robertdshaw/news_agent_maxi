@@ -18,30 +18,30 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 1) Show working directory and root contents
-st.write("ℹ️ PWD:", os.getcwd())
-st.write("ℹ️ ROOT:", os.listdir("."))
+# # 1) Show working directory and root contents
+# st.write("ℹ️ PWD:", os.getcwd())
+# st.write("ℹ️ ROOT:", os.listdir("."))
 
-# 2) Check your data folder
-data_root = Path(__file__).parent / "data"
-st.write("ℹ️ data/ exists?:", data_root.exists())
-if data_root.exists():
-    st.write("ℹ️ data/ contents:", os.listdir(data_root))
+# # 2) Check your data folder
+# data_root = Path(__file__).parent / "data"
+# st.write("ℹ️ data/ exists?:", data_root.exists())
+# if data_root.exists():
+#     st.write("ℹ️ data/ contents:", os.listdir(data_root))
 
-# 3) Check processed_data folder
-proc = data_root / "preprocessed" / "processed_data"
-st.write("ℹ️ processed_data exists?:", proc.exists())
-if proc.exists():
-    st.write("ℹ️ processed_data contents:", os.listdir(proc))
+# # 3) Check processed_data folder
+# proc = data_root / "preprocessed" / "processed_data"
+# st.write("ℹ️ processed_data exists?:", proc.exists())
+# if proc.exists():
+#     st.write("ℹ️ processed_data contents:", os.listdir(proc))
 
-# 4) Attempt to load the metadata file
-meta_fp = proc / "preprocessing_metadata.json"
-st.write("ℹ️ metadata file exists?:", meta_fp.exists())
-if meta_fp.exists():
-    st.write("✅ Loaded metadata:", json.loads(meta_fp.read_text()))
-else:
-    st.error(f"❌ Cannot find metadata at: {meta_fp}")
-    st.stop()
+# # 4) Attempt to load the metadata file
+# meta_fp = proc / "preprocessing_metadata.json"
+# st.write("ℹ️ metadata file exists?:", meta_fp.exists())
+# if meta_fp.exists():
+#     st.write("✅ Loaded metadata:", json.loads(meta_fp.read_text()))
+# else:
+#     st.error(f"❌ Cannot find metadata at: {meta_fp}")
+#     st.stop()
 
 # import streamlit as st
 import pandas as pd
