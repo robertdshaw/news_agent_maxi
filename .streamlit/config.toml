@@ -1,6 +1,6 @@
 [theme]
-primaryColor="#4b8bbe"
-backgroundColor="#f0f2f6"
-secondaryBackgroundColor="#ffffff"
-textColor="#263238"
-
+primaryColor = "#FF0000"             # bright red buttons
+backgroundColor = "#000000"          # black page
+secondaryBackgroundColor = "#222222" # dark panels
+textColor = "#00FF00"                # green text
+font = "serif"
