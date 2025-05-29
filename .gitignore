@@ -1,39 +1,31 @@
-# 1) ignore everything under data…
+# —— keep only the one metadata file in data/ ——
 /data/**
-
-# 2) but keep the data folder itself
 !/data/
 
-# 3) ignore everything under data/preprocessed…
+# preprocessed folder
 /data/preprocessed/**
-
-# 4) but keep that folder
 !/data/preprocessed/
 
-# 5) ignore everything under processed_data…
 /data/preprocessed/processed_data/**
-
-# 6) keep that folder
 !/data/preprocessed/processed_data/
 
-# 7) finally, un-ignore just the metadata file
+/data/preprocessed/processed_data/**
 !/data/preprocessed/processed_data/preprocessing_metadata.json
 
+# —— everything else you regenerate or don’t want in Git ——
 /source_data/*
 /venv/*
 /preprocessed_data/*
 /images/*
 /.env/*
-/.config/*
-/.emergency_save/*
+/config/*
+/emergency_save/*
 /.preprocess_EDA_fe/*
 
 /.df_train_progress.parquet/*
 /.df_test_progress.parquet/*
-/.df_val_progress.parquet/*
-/."*.pkl"/*
-/.EDA_3.ipynb/*
-/.emergency_save/*
-/.upworthy_data/*
-/.model_output/*
-/emergency_save/*
+/df_val_progress.parquet/*
+*.pkl
+.EDA_3.ipynb
+/upworthy_data/*
+/model_output/*
