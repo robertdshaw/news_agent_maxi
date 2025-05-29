@@ -1,10 +1,49 @@
-﻿import streamlit as st
+﻿import os
+import torch
+
+# Fix for Streamlit’s local_sources_watcher crashing on torch.classes
+try:
+    torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__)]
+except Exception:
+    pass
+
+import os, streamlit as st, json
+from pathlib import Path
+
+# 1) Show working directory and root contents
+st.write("ℹ️ PWD:", os.getcwd())
+st.write("ℹ️ ROOT:", os.listdir("."))
+
+# 2) Check your data folder
+data_root = Path(__file__).parent / "data"
+st.write("ℹ️ data/ exists?:", data_root.exists())
+if data_root.exists():
+    st.write("ℹ️ data/ contents:", os.listdir(data_root))
+
+# 3) Check processed_data folder
+proc = data_root / "preprocessed" / "processed_data"
+st.write("ℹ️ processed_data exists?:", proc.exists())
+if proc.exists():
+    st.write("ℹ️ processed_data contents:", os.listdir(proc))
+
+# 4) Attempt to load the metadata file
+meta_fp = proc / "preprocessing_metadata.json"
+st.write("ℹ️ metadata file exists?:", meta_fp.exists())
+if meta_fp.exists():
+    st.write("✅ Loaded metadata:", json.loads(meta_fp.read_text()))
+else:
+    st.error(f"❌ Cannot find metadata at: {meta_fp}")
+    st.stop()
+
+# import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
-import json
+
+# import json
 import faiss
-from pathlib import Path
+
+# from pathlib import Path
 from sentence_transformers import SentenceTransformer
 import plotly.express as px
 import plotly.graph_objects as go
@@ -26,6 +65,30 @@ st.set_page_config(
 MODEL_DIR = Path("model_output")
 FAISS_DIR = Path("faiss_index")
 PREP_DIR = Path("data/preprocessed")
+
+st.set_page_config(
+    page_title="News Editor Pro",
+    page_icon="📰",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Inject some simple “card” CSS
+st.markdown(
+    """
+    <style>
+      .card {
+        background-color: white;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+      }
+      .full-width { width: 100% !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_resource
