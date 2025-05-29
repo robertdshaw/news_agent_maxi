@@ -66,13 +66,6 @@ MODEL_DIR = Path("model_output")
 FAISS_DIR = Path("faiss_index")
 PREP_DIR = Path("data/preprocessed")
 
-st.set_page_config(
-    page_title="News Editor Pro",
-    page_icon="📰",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 # Inject some simple “card” CSS
 st.markdown(
     """
