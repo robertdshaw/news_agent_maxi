@@ -1,6 +1,6 @@
 [theme]
-primaryColor = "#4B8BBE"
-backgroundColor = "#F0F2F6"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#263238"
-font = "sans serif"
+primaryColor = "#BB86FC"            # Bright purple accents
+backgroundColor = "#121212"         # True black page background
+secondaryBackgroundColor = "#1F1B24" # Very dark gray panels
+textColor = "#E0E0E0"               # Light gray text
+font = "mono"                       # A modern, techy vibe
