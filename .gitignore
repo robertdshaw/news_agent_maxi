@@ -18,11 +18,4 @@
 /model_output/
 /images/
 
-# ── 4. Ignore everything under data/ ────────────────────────────────────────
-/data/**
-
-# ── 5. Exception: track the entire processed_data folder ────────────────────
-!/data/preprocessed/processed_data/
-!/data/preprocessed/processed_data/**
-
 # ── End of .gitignore ───────────────────────────────────────────────────────
