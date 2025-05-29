@@ -1,4 +1,9 @@
-﻿import streamlit as st
+﻿import os, streamlit as st
+
+st.write("Files under data/:")
+for root, dirs, files in os.walk("data"):
+    st.write(root, "→", files)
+
 import pandas as pd
 import numpy as np
 import pickle
