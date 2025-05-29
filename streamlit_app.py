@@ -451,156 +451,123 @@ def main():
     with tab1:
         st.header("🔮 Predict Engagement & Generate AI Rewrites")
 
-    # Top-level columns: left for input+metrics, right for guidelines
+    # Top‐level: two columns (inputs+metrics vs guidelines)
     col1, col2 = st.columns([3, 2])
 
     with col1:
-        # Nested columns: left for your text inputs & buttons, right for live metrics
+        # Level 2: split col1 into editor vs live metrics
         col_main, col_metrics = st.columns([3, 1], gap="large")
 
+        # Editor inputs
         with col_main:
-            # ---------- Inputs ----------
             title = st.text_area(
                 "Article Title",
                 placeholder="Enter your article headline here...",
                 height=100,
-                help="Enter the headline you want to test and optimize",
             )
-
             abstract = st.text_area(
                 "Abstract (Optional)",
                 placeholder="Enter article abstract...",
                 height=80,
-                help="Optional: Add abstract for better predictions",
+            )
+            category = st.selectbox(
+                "Category",
+                [
+                    "news",
+                    "sports",
+                    "finance",
+                    "travel",
+                    "lifestyle",
+                    "video",
+                    "foodanddrink",
+                    "weather",
+                    "autos",
+                    "health",
+                    "entertainment",
+                    "tv",
+                    "music",
+                    "movies",
+                    "kids",
+                    "northamerica",
+                    "middleeast",
+                    "unknown",
+                ],
             )
 
-            categories = [
-                "news",
-                "sports",
-                "finance",
-                "travel",
-                "lifestyle",
-                "video",
-                "foodanddrink",
-                "weather",
-                "autos",
-                "health",
-                "entertainment",
-                "tv",
-                "music",
-                "movies",
-                "kids",
-                "northamerica",
-                "middleeast",
-                "unknown",
-            ]
-            category = st.selectbox("Article Category", categories, index=0)
-
-            # Buttons
-            btn_col1, btn_col2 = st.columns(2)
-            with btn_col1:
-                predict_only = st.button("🎯 Predict Only", type="secondary")
-            with btn_col2:
-                predict_and_rewrite = st.button(
-                    "🤖 Predict & AI Rewrite", type="primary"
-                )
-
+        # Live metrics
         with col_metrics:
-            # ---------- Live Metrics Card ----------
             st.markdown("<div class='card full-width'>", unsafe_allow_html=True)
-            st.subheader("📊 Engagement Prediction")
-            if predict_only or predict_and_rewrite:
-                # run prediction once a button is pressed
-                if title.strip():
-                    with st.spinner("Analyzing your article..."):
-                        result = predict_engagement(
-                            title,
-                            abstract,
-                            category,
-                            model_pipeline,
-                            preprocessing_components,
-                        )
-
-                    if result:
-                        status = (
-                            "🔥 High Engagement"
-                            if result["high_engagement"]
-                            else "📉 Low Engagement"
-                        )
-                        st.metric("Prediction", status)
-                        st.metric(
-                            "Probability", f"{result['engagement_probability']:.1%}"
-                        )
-                        st.metric("Confidence", f"{result['confidence']:.1%}")
-                        st.metric("Est. CTR", f"{result['estimated_ctr']:.4f}")
-                    else:
-                        st.error("Prediction failed.")
-                else:
-                    st.warning("Please enter an article title.")
+            st.subheader("📊 Stats")
+            if "result" in locals():
+                st.metric(
+                    "Prediction", "🔥 High" if result["high_engagement"] else "📉 Low"
+                )
+                st.metric("Prob", f"{result['engagement_probability']:.1%}")
+                st.metric("Conf", f"{result['confidence']:.1%}")
+                st.metric("Ctr", f"{result['estimated_ctr']:.4f}")
             else:
-                st.info("Awaiting prediction…")
+                st.info("Awaiting input…")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # ---------- AI Rewriting & Feature Analysis (full-width under col_main) ----------
-        if predict_and_rewrite and title.strip() and result:
-            st.subheader("🤖 AI-Powered Headline Rewrites")
-            with st.spinner("Generating optimized headlines..."):
-                rewrite_result = llm_rewriter.get_best_rewrite(
-                    title,
-                    {
-                        "category": category,
-                        "ctr": result["estimated_ctr"],
-                        "readability": result["features"]["title_reading_ease"],
-                        "abstract": abstract,
-                    },
+        # Level 2 (still): buttons row
+        btn1, btn2 = st.columns(2)
+        with btn1:
+            predict_only = st.button("🎯 Predict Only")
+        with btn2:
+            predict_and_rewrite = st.button("🤖 Predict & AI Rewrite")
+
+        # Run prediction once a button is clicked
+        if (predict_only or predict_and_rewrite) and title.strip():
+            with st.spinner("Analyzing your article…"):
+                result = predict_engagement(
+                    title, abstract, category, model_pipeline, preprocessing_components
                 )
 
-            if rewrite_result and rewrite_result["best_rewrite"] != title:
-                st.success("✨ Optimized Headline Generated")
-                orig_col, new_col = st.columns(2)
-                with orig_col:
-                    st.write("**Original:**")
-                    st.info(title)
-                with new_col:
-                    st.write("**AI Optimized:**")
-                    st.success(rewrite_result["best_rewrite"])
-            else:
-                st.info("No significant improvements suggested.")
-
-        if (predict_only or predict_and_rewrite) and result:
+            # Show full prediction UI below
             st.subheader("📈 Feature Analysis")
             features = result["features"]
             fa, fb = st.columns(2)
             with fa:
-                st.write("**Title Characteristics:**")
                 st.write(f"• Length: {features['title_length']} chars")
                 st.write(f"• Words: {features['title_word_count']}")
-                st.write(f"• Reading ease: {features['title_reading_ease']:.1f}")
+                st.write(f"• Readability: {features['title_reading_ease']:.1f}")
+            with fb:
                 st.write(
                     f"• Has question? {'Yes' if features['has_question'] else 'No'}"
                 )
                 st.write(f"• Has numbers? {'Yes' if features['has_number'] else 'No'}")
-            with fb:
-                st.write("**Engagement Factors:**")
-                st.write(
-                    f"• Exclamation? {'Yes' if features['has_exclamation'] else 'No'}"
-                )
-                st.write(f"• Colon? {'Yes' if features['has_colon'] else 'No'}")
-                st.write(f"• Quotes? {'Yes' if features['has_quotes'] else 'No'}")
-                st.write(f"• All-caps words: {features['title_caps_words']}")
-                st.write(
-                    f"• Has abstract? {'Yes' if features['has_abstract'] else 'No'}"
-                )
 
+            if predict_and_rewrite:
+                st.subheader("🤖 AI-Powered Headline Rewrites")
+                with st.spinner("Generating optimized headlines…"):
+                    rewrite = llm_rewriter.get_best_rewrite(
+                        title,
+                        {
+                            "category": category,
+                            "ctr": result["estimated_ctr"],
+                            "readability": result["features"]["title_reading_ease"],
+                            "abstract": abstract,
+                        },
+                    )
+                if rewrite and rewrite["best_rewrite"] != title:
+                    orc, nc = st.columns(2)
+                    with orc:
+                        st.write("**Original:**")
+                        st.info(title)
+                    with nc:
+                        st.write("**AI Optimized:**")
+                        st.success(rewrite["best_rewrite"])
+                else:
+                    st.info("No improvements suggested.")
+
+    # Guidelines column unchanged
     with col2:
-        # ---------- Editorial Guidelines (unchanged) ----------
         st.subheader("💡 Editorial Guidelines")
-        st.write("**High-engagement headlines:**")
         st.write("• 8–12 words optimal")
         st.write("• Include numbers/questions")
-        st.write("• High readability (60+ score)")
-        st.write("• Front-load key information")
-        st.write("• Under 75 characters")
+        st.write("• High readability (60+)")
+        st.write("• Front-load key info")
+        st.write("• Under 75 chars")
 
     # Tab 2: Search Articles
     with tab2:
