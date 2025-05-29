@@ -451,240 +451,248 @@ def main():
     with tab1:
         st.header("🔮 Predict Engagement & Generate AI Rewrites")
 
-    # Top‐level: two columns (inputs+metrics vs guidelines)
-    col1, col2 = st.columns([3, 2])
+        # Top‐level: two columns (inputs+metrics vs guidelines)
+        col1, col2 = st.columns([3, 2])
 
-    with col1:
-        # Level 2: split col1 into editor vs live metrics
-        col_main, col_metrics = st.columns([3, 1], gap="large")
+        with col1:
+            # Level 2: split col1 into editor vs live metrics
+            col_main, col_metrics = st.columns([3, 1], gap="large")
 
-        # Editor inputs
-        with col_main:
-            title = st.text_area(
-                "Article Title",
-                placeholder="Enter your article headline here...",
-                height=100,
-            )
-            abstract = st.text_area(
-                "Abstract (Optional)",
-                placeholder="Enter article abstract...",
-                height=80,
-            )
-            category = st.selectbox(
-                "Category",
-                [
-                    "news",
-                    "sports",
-                    "finance",
-                    "travel",
-                    "lifestyle",
-                    "video",
-                    "foodanddrink",
-                    "weather",
-                    "autos",
-                    "health",
-                    "entertainment",
-                    "tv",
-                    "music",
-                    "movies",
-                    "kids",
-                    "northamerica",
-                    "middleeast",
-                    "unknown",
-                ],
-            )
-
-        # Live metrics
-        with col_metrics:
-            st.markdown("<div class='card full-width'>", unsafe_allow_html=True)
-            st.subheader("📊 Stats")
-            if "result" in locals():
-                st.metric(
-                    "Prediction", "🔥 High" if result["high_engagement"] else "📉 Low"
+            # Editor inputs
+            with col_main:
+                title = st.text_area(
+                    "Article Title",
+                    placeholder="Enter your article headline here...",
+                    height=100,
                 )
-                st.metric("Prob", f"{result['engagement_probability']:.1%}")
-                st.metric("Conf", f"{result['confidence']:.1%}")
-                st.metric("Ctr", f"{result['estimated_ctr']:.4f}")
-            else:
-                st.info("Awaiting input…")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        # Level 2 (still): buttons row
-        btn1, btn2 = st.columns(2)
-        with btn1:
-            predict_only = st.button("🎯 Predict Only")
-        with btn2:
-            predict_and_rewrite = st.button("🤖 Predict & AI Rewrite")
-
-        # Run prediction once a button is clicked
-        if (predict_only or predict_and_rewrite) and title.strip():
-            with st.spinner("Analyzing your article…"):
-                result = predict_engagement(
-                    title, abstract, category, model_pipeline, preprocessing_components
+                abstract = st.text_area(
+                    "Abstract (Optional)",
+                    placeholder="Enter article abstract...",
+                    height=80,
+                )
+                category = st.selectbox(
+                    "Category",
+                    [
+                        "news",
+                        "sports",
+                        "finance",
+                        "travel",
+                        "lifestyle",
+                        "video",
+                        "foodanddrink",
+                        "weather",
+                        "autos",
+                        "health",
+                        "entertainment",
+                        "tv",
+                        "music",
+                        "movies",
+                        "kids",
+                        "northamerica",
+                        "middleeast",
+                        "unknown",
+                    ],
                 )
 
-            # Show full prediction UI below
-            st.subheader("📈 Feature Analysis")
-            features = result["features"]
-            fa, fb = st.columns(2)
-            with fa:
-                st.write(f"• Length: {features['title_length']} chars")
-                st.write(f"• Words: {features['title_word_count']}")
-                st.write(f"• Readability: {features['title_reading_ease']:.1f}")
-            with fb:
-                st.write(
-                    f"• Has question? {'Yes' if features['has_question'] else 'No'}"
-                )
-                st.write(f"• Has numbers? {'Yes' if features['has_number'] else 'No'}")
+            # Live metrics
+            with col_metrics:
+                st.markdown("<div class='card full-width'>", unsafe_allow_html=True)
+                st.subheader("📊 Stats")
+                if "result" in locals():
+                    st.metric(
+                        "Prediction",
+                        "🔥 High" if result["high_engagement"] else "📉 Low",
+                    )
+                    st.metric("Prob", f"{result['engagement_probability']:.1%}")
+                    st.metric("Conf", f"{result['confidence']:.1%}")
+                    st.metric("Ctr", f"{result['estimated_ctr']:.4f}")
+                else:
+                    st.info("Awaiting input…")
+                st.markdown("</div>", unsafe_allow_html=True)
 
-            if predict_and_rewrite:
-                st.subheader("🤖 AI-Powered Headline Rewrites")
-                with st.spinner("Generating optimized headlines…"):
-                    rewrite = llm_rewriter.get_best_rewrite(
+            # Level 2 (still): buttons row
+            btn1, btn2 = st.columns(2)
+            with btn1:
+                predict_only = st.button("🎯 Predict Only")
+            with btn2:
+                predict_and_rewrite = st.button("🤖 Predict & AI Rewrite")
+
+            # Run prediction once a button is clicked
+            if (predict_only or predict_and_rewrite) and title.strip():
+                with st.spinner("Analyzing your article…"):
+                    result = predict_engagement(
                         title,
-                        {
-                            "category": category,
-                            "ctr": result["estimated_ctr"],
-                            "readability": result["features"]["title_reading_ease"],
-                            "abstract": abstract,
-                        },
-                    )
-                if rewrite and rewrite["best_rewrite"] != title:
-                    orc, nc = st.columns(2)
-                    with orc:
-                        st.write("**Original:**")
-                        st.info(title)
-                    with nc:
-                        st.write("**AI Optimized:**")
-                        st.success(rewrite["best_rewrite"])
-                else:
-                    st.info("No improvements suggested.")
-
-    # Guidelines column unchanged
-    with col2:
-        st.subheader("💡 Editorial Guidelines")
-        st.write("• 8–12 words optimal")
-        st.write("• Include numbers/questions")
-        st.write("• High readability (60+)")
-        st.write("• Front-load key info")
-        st.write("• Under 75 chars")
-
-    # Tab 2: Search Articles
-    with tab2:
-        st.header("Search Articles")
-
-        search_query = st.text_input(
-            "Search Query",
-            placeholder="Enter keywords or describe the topic...",
-            help="Search through articles by keywords, title, or content.",
-        )
-
-        col_search1, col_search2 = st.columns(2)
-
-        with col_search1:
-            num_results = st.slider("Number of results", 5, 20, 10)
-
-        # with col_search2:
-        #     include_rewrites = st.checkbox("Include rewrite variants", value=True)
-
-        if st.button("🔍 Search", type="primary"):
-            if search_query.strip():
-                with st.spinner("Searching articles..."):
-                    # Search function (simplified)
-                    embedder = load_embedder()
-                    query_embedding = embedder.encode([search_query])
-                    query_embedding = query_embedding.astype(np.float32)
-                    faiss.normalize_L2(query_embedding)
-
-                    search_k = num_results * 3
-                    distances, indices = search_system["index"].search(
-                        query_embedding, search_k
+                        abstract,
+                        category,
+                        model_pipeline,
+                        preprocessing_components,
                     )
 
-                    results = []
-                    for dist, idx in zip(distances[0], indices[0]):
-                        if idx in search_system["mappings"]["idx_to_article_id"]:
-                            article_id = search_system["mappings"]["idx_to_article_id"][
-                                idx
-                            ]
-                            if article_id in search_system["article_lookup"]:
-                                article_info = search_system["article_lookup"][
-                                    article_id
-                                ].copy()
+                # Show full prediction UI below
+                st.subheader("📈 Feature Analysis")
+                features = result["features"]
+                fa, fb = st.columns(2)
+                with fa:
+                    st.write(f"• Length: {features['title_length']} chars")
+                    st.write(f"• Words: {features['title_word_count']}")
+                    st.write(f"• Readability: {features['title_reading_ease']:.1f}")
+                with fb:
+                    st.write(
+                        f"• Has question? {'Yes' if features['has_question'] else 'No'}"
+                    )
+                    st.write(
+                        f"• Has numbers? {'Yes' if features['has_number'] else 'No'}"
+                    )
 
-                                l2_distance = float(dist)
-                                similarity_score = 1.0 / (1.0 + l2_distance)
-                                article_info["similarity_score"] = similarity_score
+                if predict_and_rewrite:
+                    st.subheader("🤖 AI-Powered Headline Rewrites")
+                    with st.spinner("Generating optimized headlines…"):
+                        rewrite = llm_rewriter.get_best_rewrite(
+                            title,
+                            {
+                                "category": category,
+                                "ctr": result["estimated_ctr"],
+                                "readability": result["features"]["title_reading_ease"],
+                                "abstract": abstract,
+                            },
+                        )
+                    if rewrite and rewrite["best_rewrite"] != title:
+                        orc, nc = st.columns(2)
+                        with orc:
+                            st.write("**Original:**")
+                            st.info(title)
+                        with nc:
+                            st.write("**AI Optimized:**")
+                            st.success(rewrite["best_rewrite"])
+                    else:
+                        st.info("No improvements suggested.")
 
-                                # if (
-                                #     not include_rewrites
-                                #     and article_info.get("dataset") == "rewrite_variant"
-                                # ):
-                                #     continue
+        # Guidelines column unchanged
+        with col2:
+            st.subheader("💡 Editorial Guidelines")
+            st.write("• 8–12 words optimal")
+            st.write("• Include numbers/questions")
+            st.write("• High readability (60+)")
+            st.write("• Front-load key info")
+            st.write("• Under 75 chars")
 
-                                results.append(article_info)
+        # Tab 2: Search Articles
+        with tab2:
+            st.header("Search Articles")
 
-                                if len(results) >= num_results:
-                                    break
+            search_query = st.text_input(
+                "Search Query",
+                placeholder="Enter keywords or describe the topic...",
+                help="Search through articles by keywords, title, or content.",
+            )
 
-                if results:
-                    displayed_titles = set()
-                    unique_title_results = []
-                    for article_info in results:
-                        title_to_check = article_info.get("title", "")
-                        if title_to_check not in displayed_titles:
-                            unique_title_results.append(article_info)
-                            displayed_titles.add(title_to_check)
-                        if (
-                            len(unique_title_results) >= num_results
-                        ):  # Ensure we still respect user's request for num_results
-                            break
-                    results_to_display = unique_title_results
+            col_search1, col_search2 = st.columns(2)
 
-                    st.subheader(f"📰 Found {len(results)} articles")
-                    for i, article in enumerate(results, 1):
-                        with st.expander(f"{i}. {article['title'][:70]}..."):
-                            col_art1, col_art2 = st.columns([3, 1])
+            with col_search1:
+                num_results = st.slider("Number of results", 5, 20, 10)
 
-                            with col_art1:
-                                st.write(f"**Title:** {article['title']}")
-                                if article.get("abstract"):
-                                    abstract_preview = (
-                                        article["abstract"][:200] + "..."
-                                        if len(article["abstract"]) > 200
-                                        else article["abstract"]
+            # with col_search2:
+            #     include_rewrites = st.checkbox("Include rewrite variants", value=True)
+
+            if st.button("🔍 Search", type="primary"):
+                if search_query.strip():
+                    with st.spinner("Searching articles..."):
+                        # Search function (simplified)
+                        embedder = load_embedder()
+                        query_embedding = embedder.encode([search_query])
+                        query_embedding = query_embedding.astype(np.float32)
+                        faiss.normalize_L2(query_embedding)
+
+                        search_k = num_results * 3
+                        distances, indices = search_system["index"].search(
+                            query_embedding, search_k
+                        )
+
+                        results = []
+                        for dist, idx in zip(distances[0], indices[0]):
+                            if idx in search_system["mappings"]["idx_to_article_id"]:
+                                article_id = search_system["mappings"][
+                                    "idx_to_article_id"
+                                ][idx]
+                                if article_id in search_system["article_lookup"]:
+                                    article_info = search_system["article_lookup"][
+                                        article_id
+                                    ].copy()
+
+                                    l2_distance = float(dist)
+                                    similarity_score = 1.0 / (1.0 + l2_distance)
+                                    article_info["similarity_score"] = similarity_score
+
+                                    # if (
+                                    #     not include_rewrites
+                                    #     and article_info.get("dataset") == "rewrite_variant"
+                                    # ):
+                                    #     continue
+
+                                    results.append(article_info)
+
+                                    if len(results) >= num_results:
+                                        break
+
+                    if results:
+                        displayed_titles = set()
+                        unique_title_results = []
+                        for article_info in results:
+                            title_to_check = article_info.get("title", "")
+                            if title_to_check not in displayed_titles:
+                                unique_title_results.append(article_info)
+                                displayed_titles.add(title_to_check)
+                            if (
+                                len(unique_title_results) >= num_results
+                            ):  # Ensure we still respect user's request for num_results
+                                break
+                        results_to_display = unique_title_results
+
+                        st.subheader(f"📰 Found {len(results)} articles")
+                        for i, article in enumerate(results, 1):
+                            with st.expander(f"{i}. {article['title'][:70]}..."):
+                                col_art1, col_art2 = st.columns([3, 1])
+
+                                with col_art1:
+                                    st.write(f"**Title:** {article['title']}")
+                                    if article.get("abstract"):
+                                        abstract_preview = (
+                                            article["abstract"][:200] + "..."
+                                            if len(article["abstract"]) > 200
+                                            else article["abstract"]
+                                        )
+                                        st.write(f"**Abstract:** {abstract_preview}")
+
+                                with col_art2:
+                                    st.metric(
+                                        "Similarity",
+                                        f"{article['similarity_score']:.3f}",
                                     )
-                                    st.write(f"**Abstract:** {abstract_preview}")
+                                    st.write(f"**Category:** {article['category']}")
+                                    # st.write(f"**Dataset:** {article['dataset']}")
 
-                            with col_art2:
-                                st.metric(
-                                    "Similarity", f"{article['similarity_score']:.3f}"
-                                )
-                                st.write(f"**Category:** {article['category']}")
-                                # st.write(f"**Dataset:** {article['dataset']}")
+                                    # if article.get("dataset") == "rewrite_variant":
+                                    #     st.write(
+                                    #         f"**Strategy:** {article.get('rewrite_strategy', 'N/A')}"
+                                    #     )
+                                    #     st.write(
+                                    #         f"**Quality:** {article.get('quality_score', 'N/A')}"
+                                    #     )
 
-                                # if article.get("dataset") == "rewrite_variant":
-                                #     st.write(
-                                #         f"**Strategy:** {article.get('rewrite_strategy', 'N/A')}"
-                                #     )
-                                #     st.write(
-                                #         f"**Quality:** {article.get('quality_score', 'N/A')}"
-                                #     )
+                                    if not pd.isna(article.get("ctr")):
+                                        st.write(f"**CTR:** {article['ctr']:.4f}")
 
-                                if not pd.isna(article.get("ctr")):
-                                    st.write(f"**CTR:** {article['ctr']:.4f}")
-
-                                if not pd.isna(article.get("high_engagement")):
-                                    engagement_status = (
-                                        "🔥 High"
-                                        if article["high_engagement"]
-                                        else "📉 Low"
-                                    )
-                                    st.write(f"**Engagement:** {engagement_status}")
+                                    if not pd.isna(article.get("high_engagement")):
+                                        engagement_status = (
+                                            "🔥 High"
+                                            if article["high_engagement"]
+                                            else "📉 Low"
+                                        )
+                                        st.write(f"**Engagement:** {engagement_status}")
+                    else:
+                        st.info("No articles found. Try different keywords.")
                 else:
-                    st.info("No articles found. Try different keywords.")
-            else:
-                st.warning("Please enter a search query.")
+                    st.warning("Please enter a search query.")
 
     # Tab 3: Rewrite Analysis
     with tab3:
