@@ -362,26 +362,54 @@ def main():
                         # Step 2: Generate AI rewrites
                         st.subheader("✨ AI-Optimized Headlines")
 
-                        if llm_rewriter:
-                            with st.spinner("🤖 Generating AI-optimized headlines..."):
-                                try:
-                                    article_data = {
-                                        "category": category,
-                                        "abstract": "",
-                                        "current_ctr": result["estimated_ctr"],
-                                    }
+                        # Load rewriter fresh every time (no cache issues)
+                        with st.spinner("🤖 Loading AI rewriter..."):
+                            try:
+                                # Create fresh model pipeline with all required fields
+                                fresh_model_pipeline = {
+                                    "model": model_pipeline["model"],
+                                    "model_name": model_pipeline.get(
+                                        "model_name", "XGBoost"
+                                    ),
+                                    "baseline_metrics": {
+                                        "baseline_ctr": 0.03,
+                                        "baseline_engagement_rate": 0.25,
+                                    },
+                                    "performance": model_pipeline.get(
+                                        "performance", {}
+                                    ),
+                                    "metadata": {},
+                                }
 
-                                    rewritten_headline = llm_rewriter.get_best_headline(
-                                        title, article_data
-                                    )
+                                # Import and create rewriter fresh
+                                from llm_rewriter import EfficientLLMHeadlineRewriter
 
-                                    if (
-                                        rewritten_headline
-                                        and rewritten_headline.strip() != title.strip()
-                                    ):
+                                fresh_rewriter = EfficientLLMHeadlineRewriter(
+                                    model_pipeline=fresh_model_pipeline,
+                                    components=preprocessing_components,
+                                    eda_insights_path="headline_eda_insights.json",
+                                )
+
+                                st.success("✅ AI Rewriter loaded successfully!")
+
+                                # Generate rewrite
+                                article_data = {
+                                    "category": category,
+                                    "abstract": "",
+                                    "current_ctr": result["estimated_ctr"],
+                                }
+
+                                rewrite_result = fresh_rewriter.get_best_headline(
+                                    title, article_data
+                                )
+
+                                if rewrite_result and "best_headline" in rewrite_result:
+                                    best_headline = rewrite_result["best_headline"]
+
+                                    if best_headline.strip() != title.strip():
                                         # Predict engagement for the rewritten headline
                                         rewritten_result = predict_engagement(
-                                            rewritten_headline,
+                                            best_headline,
                                             "",
                                             category,
                                             model_pipeline,
@@ -403,7 +431,7 @@ def main():
 
                                         with col_rewrite:
                                             st.markdown("**AI-Optimized Headline:**")
-                                            st.success(f"✨ {rewritten_headline}")
+                                            st.success(f"✨ {best_headline}")
 
                                             if rewritten_result:
                                                 st.write(
@@ -429,18 +457,45 @@ def main():
                                                 else:
                                                     st.info("📊 No significant change")
 
+                                        # Show all candidates
+                                        if "all_candidates" in rewrite_result:
+                                            with st.expander(
+                                                "🔍 View All AI-Generated Candidates"
+                                            ):
+                                                for i, (candidate, ctr) in enumerate(
+                                                    rewrite_result["all_candidates"], 1
+                                                ):
+                                                    st.write(
+                                                        f"{i}. **{candidate}** (CTR: {ctr:.4f})"
+                                                    )
                                     else:
                                         st.info(
                                             "🎯 Original headline is already well-optimized!"
                                         )
 
-                                except Exception as e:
-                                    st.error(f"❌ Rewriting failed: {e}")
-                                    st.code(str(e))
-                        else:
-                            st.error(
-                                "❌ AI Rewriter not available. Please check your OpenAI API key."
-                            )
+                                        # Show the analysis anyway
+                                        if "all_candidates" in rewrite_result:
+                                            with st.expander(
+                                                "🔍 View Alternative Suggestions"
+                                            ):
+                                                for i, (candidate, ctr) in enumerate(
+                                                    rewrite_result["all_candidates"], 1
+                                                ):
+                                                    if candidate != title:
+                                                        st.write(
+                                                            f"{i}. **{candidate}** (CTR: {ctr:.4f})"
+                                                        )
+                                else:
+                                    st.warning("🤔 No rewrite suggestions generated")
+
+                            except Exception as e:
+                                st.error(f"❌ Rewriting failed: {e}")
+
+                                # Show the exact error for debugging
+                                with st.expander("🔍 Debug Info"):
+                                    import traceback
+
+                                    st.code(traceback.format_exc())
 
                     else:
                         st.error("❌ Prediction failed. Please check your inputs.")
