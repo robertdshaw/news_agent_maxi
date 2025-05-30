@@ -323,33 +323,14 @@ def main():
     # else:
     #     st.sidebar.warning("⚠️ AI Rewriter: Not available")
 
-    # Main tabs
-    tab1, tab2, tab3 = st.tabs(
-        ["🔮 Predict & Rewrite", "🔍 Search Articles", "📊 Headline Rewrite Analysis"]
-    )
+    # # Main tabs
+    # tab1, tab2, tab3 = st.tabs(
+    #     ["🔮 Predict & Rewrite", "🔍 Search Articles", "📊 Headline Rewrite Analysis"]
+    # )
 
     # Tab 1: Predict & Rewrite
     with tab1:
-        # Editorial Guidelines below the tabs
-        st.markdown(
-            """
-        <div class="guidelines-box">
-            <div class="guidelines-title">💡 Editorial Guidelines</div>
-            <div class="guidelines-content">
-                <strong>High-engagement headlines should have:</strong>
-                <ul>
-                    <li>8-12 words optimal length</li>
-                    <li>Include numbers or questions</li>
-                    <li>High readability (60+ score)</li>
-                    <li>Front-load key information</li>
-                    <li>Under 75 characters total</li>
-                </ul>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
+        # Main layout with input on left and guidelines on right
         col1, col2 = st.columns([2, 1])
 
         with col1:
@@ -384,6 +365,27 @@ def main():
             category = st.selectbox("Article Category", categories, index=0)
 
             predict_and_rewrite = st.button("🤖 Analyze & Optimize", type="primary")
+
+        with col2:
+            # Editorial Guidelines in right column
+            st.markdown(
+                """
+            <div class="guidelines-box">
+                <div class="guidelines-title">💡 Editorial Guidelines</div>
+                <div class="guidelines-content">
+                    <strong>High-engagement headlines:</strong>
+                    <ul>
+                        <li>8-12 words optimal</li>
+                        <li>Include numbers/questions</li>
+                        <li>High readability (60+ score)</li>
+                        <li>Front-load key information</li>
+                        <li>Under 75 characters</li>
+                    </ul>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
 
         # Process prediction and rewriting
         if predict_and_rewrite:
