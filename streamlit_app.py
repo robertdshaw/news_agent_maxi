@@ -73,6 +73,29 @@ def load_model():
             with open(metadata_file, "r") as f:
                 metadata = json.load(f)
 
+        # Load baseline metrics from your actual EDA insights
+        baseline_metrics = {}
+        try:
+            with open("headline_eda_insights.json", "r") as f:
+                eda_insights = json.load(f)
+                baseline_metrics = eda_insights.get(
+                    "baseline_metrics",
+                    {
+                        "overall_avg_ctr": 0.041238101089957464,
+                        "training_median_ctr": 0.019230769230769232,
+                    },
+                )
+        except:
+            # Fallback to metadata values
+            baseline_metrics = {
+                "overall_avg_ctr": metadata.get("target_statistics", {}).get(
+                    "mean_ctr", 0.041
+                ),
+                "training_median_ctr": metadata.get("target_statistics", {}).get(
+                    "median_ctr", 0.019
+                ),
+            }
+
         model_pipeline = {
             "model": model,
             "model_name": metadata.get("model_type", "XGBoost"),
@@ -84,10 +107,7 @@ def load_model():
                 else []
             ),
             "scaler": None,
-            "baseline_metrics": metadata.get(
-                "baseline_metrics",
-                {"baseline_ctr": 0.03, "baseline_engagement_rate": 0.25},
-            ),
+            "baseline_metrics": baseline_metrics,
             "metadata": metadata,
         }
 
@@ -123,20 +143,20 @@ def load_search_system():
         return None
 
 
-# @st.cache_resource  # Temporarily disabled
+@st.cache_resource
 def load_llm_rewriter():
-    """Load the efficient LLM headline rewriter"""
+    """Load the efficient LLM headline rewriter with your actual EDA insights"""
     try:
         model_pipeline = load_model()
         components = load_preprocessing_components()
 
         if model_pipeline and components:
             try:
-                # Try the efficient rewriter first
+                # Use your actual EDA insights file
                 return EfficientLLMHeadlineRewriter(
                     model_pipeline=model_pipeline,
                     components=components,
-                    eda_insights_path="headline_eda_insights.json",  # Optional
+                    eda_insights_path="headline_eda_insights.json",  # Your actual file
                 )
             except Exception as e:
                 st.warning(f"EfficientLLMHeadlineRewriter failed: {e}")
@@ -362,162 +382,139 @@ def main():
                         # Step 2: Generate AI rewrites
                         st.subheader("✨ AI-Optimized Headlines")
 
-                        # Load rewriter fresh every time (no cache issues)
-                        with st.spinner("🤖 Loading AI rewriter..."):
-                            try:
-                                # Create fresh model pipeline with all required fields
-                                fresh_model_pipeline = {
-                                    "model": model_pipeline["model"],
-                                    "model_name": model_pipeline.get(
-                                        "model_name", "XGBoost"
-                                    ),
-                                    "baseline_metrics": {
-                                        "baseline_ctr": 0.03,
-                                        "baseline_engagement_rate": 0.25,
-                                    },
-                                    "performance": model_pipeline.get(
-                                        "performance", {}
-                                    ),
-                                    "metadata": {},
-                                }
+                        if llm_rewriter:
+                            with st.spinner("🤖 Generating AI-optimized headlines..."):
+                                try:
+                                    article_data = {
+                                        "category": category,
+                                        "abstract": "",
+                                        "current_ctr": result["estimated_ctr"],
+                                    }
 
-                                # Create EDA insights with required baseline metrics
-                                eda_insights = {
-                                    "baseline_metrics": {
-                                        "overall_avg_ctr": 0.03,
-                                        "high_engagement_avg_ctr": 0.045,
-                                        "low_engagement_avg_ctr": 0.015,
-                                    },
-                                    "editorial_strategies": {
-                                        "question_headlines": {
-                                            "avg_ctr_improvement": 0.12
-                                        },
-                                        "number_headlines": {
-                                            "avg_ctr_improvement": 0.08
-                                        },
-                                        "colon_headlines": {
-                                            "avg_ctr_improvement": 0.06
-                                        },
-                                    },
-                                }
+                                    rewrite_result = llm_rewriter.get_best_headline(
+                                        title, article_data
+                                    )
 
-                                # Import and create rewriter fresh
-                                from llm_rewriter import EfficientLLMHeadlineRewriter
+                                    if (
+                                        rewrite_result
+                                        and "best_headline" in rewrite_result
+                                    ):
+                                        best_headline = rewrite_result["best_headline"]
 
-                                fresh_rewriter = EfficientLLMHeadlineRewriter(
-                                    model_pipeline=fresh_model_pipeline,
-                                    components=preprocessing_components,
-                                )
-
-                                # Manually set the eda_insights to avoid file loading issues
-                                fresh_rewriter.eda_insights = eda_insights
-
-                                st.success("✅ AI Rewriter loaded successfully!")
-
-                                # Generate rewrite
-                                article_data = {
-                                    "category": category,
-                                    "abstract": "",
-                                    "current_ctr": result["estimated_ctr"],
-                                }
-
-                                rewrite_result = fresh_rewriter.get_best_headline(
-                                    title, article_data
-                                )
-
-                                if rewrite_result and "best_headline" in rewrite_result:
-                                    best_headline = rewrite_result["best_headline"]
-
-                                    if best_headline.strip() != title.strip():
-                                        # Predict engagement for the rewritten headline
-                                        rewritten_result = predict_engagement(
-                                            best_headline,
-                                            "",
-                                            category,
-                                            model_pipeline,
-                                            preprocessing_components,
-                                        )
-
-                                        # Display comparison
-                                        col_orig, col_rewrite = st.columns(2)
-
-                                        with col_orig:
-                                            st.markdown("**Original Headline:**")
-                                            st.info(f"📝 {title}")
-                                            st.write(
-                                                f"CTR: {result['estimated_ctr']:.4f}"
-                                            )
-                                            st.write(
-                                                f"Engagement: {result['engagement_probability']:.1%}"
+                                        if best_headline.strip() != title.strip():
+                                            # Predict engagement for the rewritten headline
+                                            rewritten_result = predict_engagement(
+                                                best_headline,
+                                                "",
+                                                category,
+                                                model_pipeline,
+                                                preprocessing_components,
                                             )
 
-                                        with col_rewrite:
-                                            st.markdown("**AI-Optimized Headline:**")
-                                            st.success(f"✨ {best_headline}")
+                                            # Display comparison
+                                            col_orig, col_rewrite = st.columns(2)
 
-                                            if rewritten_result:
+                                            with col_orig:
+                                                st.markdown("**Original Headline:**")
+                                                st.info(f"📝 {title}")
                                                 st.write(
-                                                    f"CTR: {rewritten_result['estimated_ctr']:.4f}"
+                                                    f"CTR: {result['estimated_ctr']:.4f}"
                                                 )
                                                 st.write(
-                                                    f"Engagement: {rewritten_result['engagement_probability']:.1%}"
+                                                    f"Engagement: {result['engagement_probability']:.1%}"
                                                 )
 
-                                                # Show improvement
-                                                ctr_improvement = (
-                                                    rewritten_result["estimated_ctr"]
-                                                    - result["estimated_ctr"]
+                                            with col_rewrite:
+                                                st.markdown(
+                                                    "**AI-Optimized Headline:**"
                                                 )
-                                                if ctr_improvement > 0:
-                                                    st.success(
-                                                        f"📈 CTR Improvement: +{ctr_improvement:.4f}"
-                                                    )
-                                                elif ctr_improvement < 0:
-                                                    st.warning(
-                                                        f"📉 CTR Change: {ctr_improvement:.4f}"
-                                                    )
-                                                else:
-                                                    st.info("📊 No significant change")
+                                                st.success(f"✨ {best_headline}")
 
-                                        # Show all candidates
-                                        if "all_candidates" in rewrite_result:
-                                            with st.expander(
-                                                "🔍 View All AI-Generated Candidates"
-                                            ):
-                                                for i, (candidate, ctr) in enumerate(
-                                                    rewrite_result["all_candidates"], 1
-                                                ):
+                                                if rewritten_result:
                                                     st.write(
-                                                        f"{i}. **{candidate}** (CTR: {ctr:.4f})"
+                                                        f"CTR: {rewritten_result['estimated_ctr']:.4f}"
                                                     )
-                                    else:
-                                        st.info(
-                                            "🎯 Original headline is already well-optimized!"
-                                        )
+                                                    st.write(
+                                                        f"Engagement: {rewritten_result['engagement_probability']:.1%}"
+                                                    )
 
-                                        # Show the analysis anyway
-                                        if "all_candidates" in rewrite_result:
-                                            with st.expander(
-                                                "🔍 View Alternative Suggestions"
-                                            ):
-                                                for i, (candidate, ctr) in enumerate(
-                                                    rewrite_result["all_candidates"], 1
+                                                    # Show improvement
+                                                    ctr_improvement = (
+                                                        rewritten_result[
+                                                            "estimated_ctr"
+                                                        ]
+                                                        - result["estimated_ctr"]
+                                                    )
+                                                    if ctr_improvement > 0:
+                                                        st.success(
+                                                            f"📈 CTR Improvement: +{ctr_improvement:.4f}"
+                                                        )
+                                                    elif ctr_improvement < 0:
+                                                        st.warning(
+                                                            f"📉 CTR Change: {ctr_improvement:.4f}"
+                                                        )
+                                                    else:
+                                                        st.info(
+                                                            "📊 No significant change"
+                                                        )
+
+                                            # Show all candidates
+                                            if "all_candidates" in rewrite_result:
+                                                with st.expander(
+                                                    "🔍 View All AI-Generated Candidates"
                                                 ):
-                                                    if candidate != title:
+                                                    for i, (
+                                                        candidate,
+                                                        ctr,
+                                                    ) in enumerate(
+                                                        rewrite_result[
+                                                            "all_candidates"
+                                                        ],
+                                                        1,
+                                                    ):
                                                         st.write(
                                                             f"{i}. **{candidate}** (CTR: {ctr:.4f})"
                                                         )
-                                else:
-                                    st.warning("🤔 No rewrite suggestions generated")
+                                        else:
+                                            st.info(
+                                                "🎯 Original headline is already well-optimized!"
+                                            )
 
-                            except Exception as e:
-                                st.error(f"❌ Rewriting failed: {e}")
+                                            # Show the analysis anyway
+                                            if "all_candidates" in rewrite_result:
+                                                with st.expander(
+                                                    "🔍 View Alternative Suggestions"
+                                                ):
+                                                    for i, (
+                                                        candidate,
+                                                        ctr,
+                                                    ) in enumerate(
+                                                        rewrite_result[
+                                                            "all_candidates"
+                                                        ],
+                                                        1,
+                                                    ):
+                                                        if candidate != title:
+                                                            st.write(
+                                                                f"{i}. **{candidate}** (CTR: {ctr:.4f})"
+                                                            )
+                                    else:
+                                        st.warning(
+                                            "🤔 No rewrite suggestions generated"
+                                        )
 
-                                # Show the exact error for debugging
-                                with st.expander("🔍 Debug Info"):
-                                    import traceback
+                                except Exception as e:
+                                    st.error(f"❌ Rewriting failed: {e}")
 
-                                    st.code(traceback.format_exc())
+                                    # Show the exact error for debugging
+                                    with st.expander("🔍 Debug Info"):
+                                        import traceback
+
+                                        st.code(traceback.format_exc())
+                        else:
+                            st.error(
+                                "❌ AI Rewriter not available. Please check your OpenAI API key."
+                            )
 
                     else:
                         st.error("❌ Prediction failed. Please check your inputs.")
