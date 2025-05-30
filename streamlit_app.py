@@ -49,6 +49,28 @@ st.markdown(
         margin-bottom: 1rem;
       }
       .full-width { width: 100% !important; }
+      .guidelines-box {
+        position: fixed;
+        right: 20px;
+        top: 100px;
+        width: 250px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 1000;
+      }
+      .guidelines-content {
+        font-size: 14px;
+        line-height: 1.4;
+      }
+      .guidelines-title {
+        font-weight: bold;
+        font-size: 16px;
+        margin-bottom: 10px;
+        color: #333;
+      }
     </style>
     """,
     unsafe_allow_html=True,
@@ -88,6 +110,7 @@ def load_model():
                     {
                         "overall_avg_ctr": 0.041238101089957464,
                         "training_median_ctr": 0.019230769230769232,
+                        "ctr_threshold": 0.05,
                     },
                 )
         except:
@@ -98,6 +121,9 @@ def load_model():
                 ),
                 "training_median_ctr": metadata.get("target_statistics", {}).get(
                     "median_ctr", 0.019
+                ),
+                "ctr_threshold": metadata.get("target_statistics", {}).get(
+                    "ctr_threshold", 0.05
                 ),
             }
 
@@ -269,34 +295,34 @@ def main():
         search_system = load_search_system()
         llm_rewriter = load_llm_rewriter()
 
-    # Sidebar status
-    st.sidebar.header("🎯 System Status")
-    if model_pipeline:
-        st.sidebar.success(f"✅ Model: {model_pipeline['model_name']}")
-        if "auc" in model_pipeline.get("performance", {}):
-            st.sidebar.info(f"📊 AUC: {model_pipeline['performance']['auc']:.4f}")
-    else:
-        st.sidebar.error("❌ Model not loaded")
+    # # Sidebar status
+    # st.sidebar.header("🎯 System Status")
+    # if model_pipeline:
+    #     st.sidebar.success(f"✅ Model: {model_pipeline['model_name']}")
+    #     if "auc" in model_pipeline.get("performance", {}):
+    #         st.sidebar.info(f"📊 AUC: {model_pipeline['performance']['auc']:.4f}")
+    # else:
+    #     st.sidebar.error("❌ Model not loaded")
 
-    if preprocessing_components:
-        st.sidebar.success("✅ Preprocessing: Components loaded")
-        st.sidebar.info(
-            f"📈 Features: {len(preprocessing_components.get('feature_order', []))}"
-        )
-    else:
-        st.sidebar.error("❌ Preprocessing components not loaded")
+    # if preprocessing_components:
+    #     st.sidebar.success("✅ Preprocessing: Components loaded")
+    #     st.sidebar.info(
+    #         f"📈 Features: {len(preprocessing_components.get('feature_order', []))}"
+    #     )
+    # else:
+    #     st.sidebar.error("❌ Preprocessing components not loaded")
 
-    if search_system:
-        st.sidebar.success(
-            f"✅ Search: {search_system['metadata']['total_articles']:,} articles"
-        )
-    else:
-        st.sidebar.error("❌ Search system not loaded")
+    # if search_system:
+    #     st.sidebar.success(
+    #         f"✅ Search: {search_system['metadata']['total_articles']:,} articles"
+    #     )
+    # else:
+    #     st.sidebar.error("❌ Search system not loaded")
 
-    if llm_rewriter:
-        st.sidebar.success("✅ AI Rewriter: Available")
-    else:
-        st.sidebar.warning("⚠️ AI Rewriter: Not available")
+    # if llm_rewriter:
+    #     st.sidebar.success("✅ AI Rewriter: Available")
+    # else:
+    #     st.sidebar.warning("⚠️ AI Rewriter: Not available")
 
     # Main tabs
     tab1, tab2, tab3 = st.tabs(
@@ -305,52 +331,62 @@ def main():
 
     # Tab 1: Predict & Rewrite
     with tab1:
-        st.header("Predict Engagement & Generate AI Rewrites")
+        # Create layout with main content and floating guidelines
+        main_col, spacer_col = st.columns([7, 3])
 
-        col1, col2 = st.columns([3, 2])
+        with main_col:
+            col1, col2 = st.columns([3, 1])
 
-        with col1:
-            title = st.text_area(
-                "Article Title",
-                placeholder="Enter your article headline here...",
-                height=100,
-                help="Enter the headline you want to test and optimize",
-            )
+            with col1:
+                title = st.text_area(
+                    "Article Title",
+                    placeholder="Enter your article headline here...",
+                    height=100,
+                    help="Enter the headline you want to test and optimize",
+                )
 
-            categories = [
-                "news",
-                "sports",
-                "finance",
-                "travel",
-                "lifestyle",
-                "video",
-                "foodanddrink",
-                "weather",
-                "autos",
-                "health",
-                "entertainment",
-                "tv",
-                "music",
-                "movies",
-                "kids",
-                "northamerica",
-                "middleeast",
-                "unknown",
-            ]
+                categories = [
+                    "news",
+                    "sports",
+                    "finance",
+                    "travel",
+                    "lifestyle",
+                    "video",
+                    "foodanddrink",
+                    "weather",
+                    "autos",
+                    "health",
+                    "entertainment",
+                    "tv",
+                    "music",
+                    "movies",
+                    "kids",
+                    "northamerica",
+                    "middleeast",
+                    "unknown",
+                ]
 
-            category = st.selectbox("Article Category", categories, index=0)
+                category = st.selectbox("Article Category", categories, index=0)
 
-            predict_and_rewrite = st.button("🤖 Predict & AI Rewrite", type="primary")
+                predict_and_rewrite = st.button("🤖 Analyze & Optimize", type="primary")
 
-        with col2:
-            # Tips and guidelines
-            st.subheader("💡 Editorial Guidelines")
-            st.write("**High-engagement headlines:**")
-            st.write("• 8-12 words optimal")
-            st.write("• Include numbers/questions")
-            st.write("• High readability (60+ score)")
-            st.write("• Front-load key information")
-            st.write("• Under 75 characters")
+        # Floating Editorial Guidelines in the spacer column
+        with spacer_col:
+            # Editorial Guidelines box
+            guidelines_html = """
+            <div class="guidelines-box">
+                <div class="guidelines-title">💡 Editorial Guidelines</div>
+                <div class="guidelines-content">
+                    <strong>High-engagement headlines:</strong><br>
+                    • 8-12 words optimal<br>
+                    • Include numbers/questions<br>
+                    • High readability (60+ score)<br>
+                    • Front-load key information<br>
+                    • Under 75 characters<br>
+                </div>
+            </div>
+            """
+            st.markdown(guidelines_html, unsafe_allow_html=True)
 
         # Process prediction and rewriting
         if predict_and_rewrite:
@@ -367,29 +403,39 @@ def main():
                         )
 
                     if result and isinstance(result, dict):
-                        # Display prediction results
-                        st.subheader("📊 Engagement Prediction")
+                        # Get threshold from model pipeline
+                        threshold = model_pipeline["baseline_metrics"].get(
+                            "ctr_threshold", 0.05
+                        )
 
-                        col_pred1, col_pred2, col_pred3, col_pred4 = st.columns(4)
+                        # Display prediction results
+                        st.subheader("📊 Engagement Analysis")
+
+                        col_pred1, col_pred2, col_pred3 = st.columns(3)
 
                         with col_pred1:
-                            engagement_status = (
-                                "🔥 High Engagement"
+                            # Show engagement level with threshold
+                            engagement_level = (
+                                "High Engagement"
                                 if result["high_engagement"]
-                                else "📉 Low Engagement"
+                                else "Low Engagement"
                             )
-                            st.metric("Prediction", engagement_status)
+                            engagement_emoji = (
+                                "🔥" if result["high_engagement"] else "📉"
+                            )
+                            st.metric(
+                                "Engagement Level",
+                                f"{engagement_emoji} {engagement_level}",
+                            )
 
                         with col_pred2:
-                            st.metric(
-                                "Probability", f"{result['engagement_probability']:.1%}"
-                            )
+                            # Show CTR as percentage with threshold
+                            ctr_percentage = result["estimated_ctr"] * 100
+                            st.metric("Estimated CTR", f"{ctr_percentage:.2f}%")
+                            st.caption(f"Threshold: {threshold*100:.1f}%")
 
                         with col_pred3:
                             st.metric("Confidence", f"{result['confidence']:.1%}")
-
-                        with col_pred4:
-                            st.metric("Est. CTR", f"{result['estimated_ctr']:.4f}")
 
                         # Step 2: Generate AI rewrites
                         st.subheader("✨ AI-Optimized Headlines")
@@ -430,7 +476,7 @@ def main():
                                                 st.markdown("**Original Headline:**")
                                                 st.info(f"📝 {title}")
                                                 st.write(
-                                                    f"CTR: {result['estimated_ctr']:.4f}"
+                                                    f"CTR: {result['estimated_ctr']*100:.2f}%"
                                                 )
                                                 st.write(
                                                     f"Engagement: {result['engagement_probability']:.1%}"
@@ -444,7 +490,7 @@ def main():
 
                                                 if rewritten_result:
                                                     st.write(
-                                                        f"CTR: {rewritten_result['estimated_ctr']:.4f}"
+                                                        f"CTR: {rewritten_result['estimated_ctr']*100:.2f}%"
                                                     )
                                                     st.write(
                                                         f"Engagement: {rewritten_result['engagement_probability']:.1%}"
@@ -456,14 +502,14 @@ def main():
                                                             "estimated_ctr"
                                                         ]
                                                         - result["estimated_ctr"]
-                                                    )
+                                                    ) * 100
                                                     if ctr_improvement > 0:
                                                         st.success(
-                                                            f"📈 CTR Improvement: +{ctr_improvement:.4f}"
+                                                            f"📈 CTR Improvement: +{ctr_improvement:.2f}%"
                                                         )
                                                     elif ctr_improvement < 0:
                                                         st.warning(
-                                                            f"📉 CTR Change: {ctr_improvement:.4f}"
+                                                            f"📉 CTR Change: {ctr_improvement:.2f}%"
                                                         )
                                                     else:
                                                         st.info(
@@ -485,7 +531,7 @@ def main():
                                                         1,
                                                     ):
                                                         st.write(
-                                                            f"{i}. **{candidate}** (CTR: {ctr:.4f})"
+                                                            f"{i}. **{candidate}** (CTR: {ctr*100:.2f}%)"
                                                         )
                                         else:
                                             st.info(
@@ -508,7 +554,7 @@ def main():
                                                     ):
                                                         if candidate != title:
                                                             st.write(
-                                                                f"{i}. **{candidate}** (CTR: {ctr:.4f})"
+                                                                f"{i}. **{candidate}** (CTR: {ctr*100:.2f}%)"
                                                             )
                                     else:
                                         st.warning(
@@ -607,7 +653,9 @@ def main():
                                         st.write(f"**Category:** {article['category']}")
 
                                         if not pd.isna(article.get("ctr")):
-                                            st.write(f"**CTR:** {article['ctr']:.4f}")
+                                            st.write(
+                                                f"**CTR:** {article['ctr']*100:.2f}%"
+                                            )
 
                                         if not pd.isna(article.get("high_engagement")):
                                             engagement_status = (
