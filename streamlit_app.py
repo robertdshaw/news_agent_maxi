@@ -477,9 +477,9 @@ def main():
                                                 st.write(
                                                     f"CTR: {result['estimated_ctr']*100:.2f}%"
                                                 )
-                                                st.write(
-                                                    f"Engagement: {result['engagement_probability']:.1%}"
-                                                )
+                                                # st.write(
+                                                #     f"Engagement: {result['engagement_probability']:.1%}"
+                                                # )
 
                                             with col_rewrite:
                                                 st.markdown(
