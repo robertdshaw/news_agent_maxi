@@ -323,10 +323,10 @@ def main():
     # else:
     #     st.sidebar.warning("⚠️ AI Rewriter: Not available")
 
-    # # Main tabs
-    # tab1, tab2, tab3 = st.tabs(
-    #     ["🔮 Predict & Rewrite", "🔍 Search Articles", "📊 Headline Rewrite Analysis"]
-    # )
+    # Main tabs
+    tab1, tab2, tab3 = st.tabs(
+        ["🔮 Predict & Rewrite", "🔍 Search Articles", "📊 Headline Rewrite Analysis"]
+    )
 
     # Tab 1: Predict & Rewrite
     with tab1:
