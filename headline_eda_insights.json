@@ -527,5 +527,23 @@
     },
     "overall_avg_ctr": 0.041238101089957464,
     "overall_median_ctr": 0.019230769230769232
+  },
+  "baseline_metrics": {
+    "overall_avg_ctr": 0.041238101089957464,
+    "overall_median_ctr": 0.019230769230769232,
+    "median_ctr": 0.019230769230769232,
+    "high_engagement_avg_ctr": 0.0618571516349362,
+    "low_engagement_avg_ctr": 0.024742860653974477
+  },
+  "editorial_strategies": {
+    "question_headlines": {
+      "avg_ctr_improvement": -0.03391505892200796
+    },
+    "number_headlines": {
+      "avg_ctr_improvement": -0.028297033076658845
+    },
+    "colon_headlines": {
+      "avg_ctr_improvement": 0.1658588025459022
+    }
   }
 }
