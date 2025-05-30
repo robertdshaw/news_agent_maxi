@@ -433,8 +433,8 @@ def main():
                             st.metric("Estimated CTR", f"{ctr_percentage:.2f}%")
                             st.caption(f"Threshold: {threshold*100:.1f}%")
 
-                        with col_pred3:
-                            st.metric("Confidence", f"{result['confidence']:.1%}")
+                        # with col_pred3:
+                        #     st.metric("Confidence", f"{result['confidence']:.1%}")
 
                         # Step 2: Generate AI rewrites
                         st.subheader("✨ AI-Optimized Headlines")
