@@ -50,26 +50,32 @@ st.markdown(
       }
       .full-width { width: 100% !important; }
       .guidelines-box {
-        position: fixed;
-        right: 20px;
-        top: 100px;
-        width: 250px;
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 15px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        z-index: 1000;
-      }
-      .guidelines-content {
-        font-size: 14px;
-        line-height: 1.4;
+        background-color: #f0f2f6;
+        border: 2px solid #4f8bf9;
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
       }
       .guidelines-title {
         font-weight: bold;
-        font-size: 16px;
-        margin-bottom: 10px;
-        color: #333;
+        font-size: 18px;
+        margin-bottom: 15px;
+        color: #1f4e79;
+        text-align: center;
+      }
+      .guidelines-content {
+        font-size: 15px;
+        line-height: 1.6;
+        color: #2c3e50;
+      }
+      .guidelines-content ul {
+        margin: 10px 0;
+        padding-left: 20px;
+      }
+      .guidelines-content li {
+        margin: 8px 0;
+        color: #34495e;
       }
     </style>
     """,
@@ -281,13 +287,6 @@ def main():
     st.title("📰 AI-Assisted Headline Hunter")
     st.write("**Predict engagement and optimize headlines with AI-powered rewriting**")
 
-    # Temporary: Add cache clear button
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        if st.button("🔄 Clear Cache"):
-            st.cache_resource.clear()
-            st.rerun()
-
     # Load all systems once at startup
     with st.spinner("Loading AI systems..."):
         model_pipeline = load_model()
@@ -331,62 +330,60 @@ def main():
 
     # Tab 1: Predict & Rewrite
     with tab1:
-        # Create layout with main content and floating guidelines
-        main_col, spacer_col = st.columns([7, 3])
-
-        with main_col:
-            col1, col2 = st.columns([3, 1])
-
-            with col1:
-                title = st.text_area(
-                    "Article Title",
-                    placeholder="Enter your article headline here...",
-                    height=100,
-                    help="Enter the headline you want to test and optimize",
-                )
-
-                categories = [
-                    "news",
-                    "sports",
-                    "finance",
-                    "travel",
-                    "lifestyle",
-                    "video",
-                    "foodanddrink",
-                    "weather",
-                    "autos",
-                    "health",
-                    "entertainment",
-                    "tv",
-                    "music",
-                    "movies",
-                    "kids",
-                    "northamerica",
-                    "middleeast",
-                    "unknown",
-                ]
-
-                category = st.selectbox("Article Category", categories, index=0)
-
-                predict_and_rewrite = st.button("🤖 Analyze & Optimize", type="primary")
-
-        # Floating Editorial Guidelines in the spacer column
-        with spacer_col:
-            # Editorial Guidelines box
-            guidelines_html = """
-            <div class="guidelines-box">
-                <div class="guidelines-title">💡 Editorial Guidelines</div>
-                <div class="guidelines-content">
-                    <strong>High-engagement headlines:</strong><br>
-                    • 8-12 words optimal<br>
-                    • Include numbers/questions<br>
-                    • High readability (60+ score)<br>
-                    • Front-load key information<br>
-                    • Under 75 characters<br>
-                </div>
-            </div>
+        # Editorial Guidelines below the tabs
+        st.markdown(
             """
-            st.markdown(guidelines_html, unsafe_allow_html=True)
+        <div class="guidelines-box">
+            <div class="guidelines-title">💡 Editorial Guidelines</div>
+            <div class="guidelines-content">
+                <strong>High-engagement headlines should have:</strong>
+                <ul>
+                    <li>8-12 words optimal length</li>
+                    <li>Include numbers or questions</li>
+                    <li>High readability (60+ score)</li>
+                    <li>Front-load key information</li>
+                    <li>Under 75 characters total</li>
+                </ul>
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            title = st.text_area(
+                "Article Title",
+                placeholder="Enter your article headline here...",
+                height=100,
+                help="Enter the headline you want to test and optimize",
+            )
+
+            categories = [
+                "news",
+                "sports",
+                "finance",
+                "travel",
+                "lifestyle",
+                "video",
+                "foodanddrink",
+                "weather",
+                "autos",
+                "health",
+                "entertainment",
+                "tv",
+                "music",
+                "movies",
+                "kids",
+                "northamerica",
+                "middleeast",
+                "unknown",
+            ]
+
+            category = st.selectbox("Article Category", categories, index=0)
+
+            predict_and_rewrite = st.button("🤖 Analyze & Optimize", type="primary")
 
         # Process prediction and rewriting
         if predict_and_rewrite:
