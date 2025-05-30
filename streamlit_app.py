@@ -382,38 +382,36 @@ def predict_engagement(
 
 
 def main():
-    # Load models and systems
+    st.title("📰 AI-Assisted Headline Hunter")
+
+    # Load models at the top
     model_pipeline = load_model()
-    search_system = load_search_system()
     llm_rewriter = load_llm_rewriter()
+    search_system = load_search_system()
     preprocessing_components = load_preprocessing_components()
 
-    # Header
-    st.title("📰 AI-Assisted Headline Hunter")
-    st.markdown(
-        "**Predict engagement and optimize headlines with AI-powered rewriting**"
-    )
+    # UI inputs
+    title = st.text_input("Article Title")
+    category = st.selectbox("Article Category", ["news", "sports", "finance", "tech"])
+
+    # Define button BEFORE using it
+    predict_and_rewrite = st.button("🤖 Predict & AI Rewrite")
+
+    # Now use the button
     if predict_and_rewrite:
         if title.strip():
             with st.spinner("Analyzing your article..."):
-                # Use the preprocessing_components you already loaded
                 result = predict_engagement(
-                    title,
-                    "",
-                    category,
-                    model_pipeline,  # Use the one from top
-                    preprocessing_components,  # Use the one from top
+                    title, "", category, model_pipeline, preprocessing_components
                 )
 
             if result and isinstance(result, dict):
-                # Display prediction results
+                # Show prediction results
                 st.subheader("📊 Engagement Prediction")
-                # ... your prediction display code ...
+                # ... prediction display code ...
 
-                # Use the llm_rewriter you already loaded
-                if (
-                    llm_rewriter
-                ):  # Use the one from top, don't call load_llm_rewriter() again
+                # Do rewriting
+                if llm_rewriter:
                     try:
                         article_data = {
                             "category": category,
@@ -433,13 +431,12 @@ def main():
 
                     except Exception as e:
                         st.error(f"Rewriting failed: {e}")
-                        import traceback
-
-                        st.code(traceback.format_exc())
                 else:
                     st.error("LLM Rewriter not available")
             else:
                 st.error("Prediction failed")
+        else:
+            st.warning("Please enter an article title.")
     # # Sidebar
     # st.sidebar.header("🎯 System Status")
     # if model_pipeline:
