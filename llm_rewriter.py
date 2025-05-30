@@ -4,16 +4,16 @@ import pandas as pd
 import numpy as np
 import logging
 from openai import OpenAI
-from streamlit_app import create_article_features_exact, load_preprocessing_components
+from feature_utils import create_article_features_exact, load_preprocessing_components
 
 
 class EfficientLLMHeadlineRewriter:
-    """Efficient LLM headline rewriter using your XGBoost model and real EDA insights"""
+    """Efficient LLM headline rewriter using XGBoost model and EDA insights"""
 
     def __init__(
         self, model_pipeline, components=None, llm_client=None, eda_insights_path=None
     ):
-        """Initialize with your trained model and preprocessing components"""
+        """Initialize with trained model and preprocessing components"""
         self.model_pipeline = model_pipeline
 
         if components is None:
@@ -28,18 +28,18 @@ class EfficientLLMHeadlineRewriter:
         # Load EDA insights if available
         self.eda_insights = self._load_eda_insights(eda_insights_path)
 
-        # Configuration based on your ACTUAL EDA findings
+        # Configuration based on EDA findings
         self.config = {
-            "optimal_word_count": (15, 20),  # Your data shows 15-20 words optimal
-            "max_length": 100,  # 80-100 chars optimal in your data
+            "optimal_word_count": (15, 20),  # data shows 15-20 words optimal
+            "max_length": 100,  # 80-100 chars optimal in the data
             "target_readability": 40,  # 30-50 readability range optimal
-            "high_engagement_threshold": 0.041238,  # Your overall average CTR
+            "high_engagement_threshold": 0.041238,  # overall average CTR
         }
 
-        logging.info("✅ Efficient LLM Headline Rewriter initialized")
-        logging.info(f"📊 Using XGBoost model for 100% of CTR predictions")
+        logging.info("Efficient LLM Headline Rewriter initialized")
+        logging.info(f"Using XGBoost model for 100% of CTR predictions")
         logging.info(
-            f"🎯 EDA insights: {'Loaded' if self.eda_insights else 'Using defaults'}"
+            f"EDA insights: {'Loaded' if self.eda_insights else 'Using defaults'}"
         )
 
     def _load_eda_insights(self, eda_insights_path):
@@ -50,12 +50,12 @@ class EfficientLLMHeadlineRewriter:
 
                 with open(eda_insights_path, "r") as f:
                     insights = json.load(f)
-                logging.info(f"✅ Loaded EDA insights from {eda_insights_path}")
+                logging.info(f"Loaded EDA insights from {eda_insights_path}")
                 return insights
             except Exception as e:
                 logging.warning(f"Could not load EDA insights: {e}")
 
-        # Your ACTUAL EDA findings as defaults
+        #  EDA findings as defaults
         return {
             "top_features_by_impact": [
                 ("too_long_title", 22.0, 0.0474, 7438),
