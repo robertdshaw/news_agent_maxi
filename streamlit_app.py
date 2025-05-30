@@ -491,9 +491,9 @@ def main():
                                                     st.write(
                                                         f"CTR: {rewritten_result['estimated_ctr']*100:.2f}%"
                                                     )
-                                                    st.write(
-                                                        f"Engagement: {rewritten_result['engagement_probability']:.1%}"
-                                                    )
+                                                    # st.write(
+                                                    #     f"Engagement: {rewritten_result['engagement_probability']:.1%}"
+                                                    # )
 
                                                     # Show improvement
                                                     ctr_improvement = (
