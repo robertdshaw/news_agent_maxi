@@ -537,14 +537,55 @@ def main():
                             with col_pred4:
                                 st.metric("Est. CTR", f"{result['estimated_ctr']:.4f}")
 
-                            # Rest of your code...
-
                         else:
                             st.error(f"Prediction failed. Result: {result}")
                     else:
                         st.error("Model or components failed to load")
                 else:
                     st.warning("Please enter an article title.")
+    # In your streamlit_app.py, after the prediction succeeds, add:
+
+    if result and isinstance(result, dict):
+        # ... your prediction display code ...
+
+        # DEBUG: Check if rewriter section is reached
+        st.write("🔍 **Debug: Starting rewrite process...**")
+
+        # Load the rewriter
+        st.write("Loading LLM rewriter...")
+        rewriter = load_llm_rewriter()
+        st.write(f"Rewriter loaded: {rewriter is not None}")
+
+        if rewriter:
+            st.write("🔍 **Attempting to rewrite headline...**")
+            try:
+                # Get the best headline
+                article_data = {
+                    "category": category,
+                    "abstract": "",  # or whatever abstract you have
+                    "current_ctr": result["estimated_ctr"],
+                }
+
+                st.write(f"Article data: {article_data}")
+
+                rewritten_headline = rewriter.get_best_headline(title, article_data)
+                st.write(f"🔍 **Rewritten headline:** '{rewritten_headline}'")
+
+                if rewritten_headline and rewritten_headline != title:
+                    st.subheader("✨ AI-Optimized Headlines")
+                    st.success(f"**Optimized:** {rewritten_headline}")
+                else:
+                    st.warning(
+                        "No improvement suggested - original headline is already good!"
+                    )
+
+            except Exception as e:
+                st.error(f"❌ Rewriting failed: {e}")
+                import traceback
+
+                st.code(traceback.format_exc())
+        else:
+            st.error("❌ LLM Rewriter failed to load")
 
         with col2:
             # Tips and guidelines
