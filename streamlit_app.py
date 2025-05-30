@@ -461,12 +461,12 @@ def main():
                 help="Enter the headline you want to test and optimize",
             )
 
-            abstract = st.text_area(
-                "Abstract (Optional)",
-                placeholder="Enter article abstract...",
-                height=80,
-                help="Optional: Add abstract for better predictions",
-            )
+            # abstract = st.text_area(
+            #     "Abstract (Optional)",
+            #     placeholder="Enter article abstract...",
+            #     height=80,
+            #     help="Optional: Add abstract for better predictions",
+            # )
 
             categories = [
                 "news",
@@ -493,20 +493,20 @@ def main():
 
             col_btn1, col_btn2 = st.columns(2)
 
-            with col_btn1:
-                predict_only = st.button("🎯 Predict Only", type="secondary")
+            # with col_btn1:
+            #     predict_only = st.button("🎯 Predict Only", type="secondary")
 
             with col_btn2:
                 predict_and_rewrite = st.button(
                     "🤖 Predict & AI Rewrite", type="primary"
                 )
 
-            if predict_only or predict_and_rewrite:
+            if predict_and_rewrite:
                 if title.strip():
                     with st.spinner("Analyzing your article..."):
                         result = predict_engagement(
                             title,
-                            abstract,
+                            # abstract,
                             category,
                             model_pipeline,
                             preprocessing_components,
@@ -531,8 +531,8 @@ def main():
                                 "Probability", f"{result['engagement_probability']:.1%}"
                             )
 
-                        with col_pred3:
-                            st.metric("Confidence", f"{result['confidence']:.1%}")
+                        # with col_pred3:
+                        #     st.metric("Confidence", f"{result['confidence']:.1%}")
 
                         with col_pred4:
                             st.metric("Est. CTR", f"{result['estimated_ctr']:.4f}")
@@ -550,7 +550,7 @@ def main():
                                     "readability": result["features"][
                                         "title_reading_ease"
                                     ],
-                                    "abstract": abstract,
+                                    # "abstract": abstract,
                                 }
 
                                 rewrite_result = llm_rewriter.get_best_rewrite(
