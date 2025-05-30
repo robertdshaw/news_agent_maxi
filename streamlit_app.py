@@ -66,7 +66,6 @@ st.set_page_config(
 
 # Add this to track page visits
 log_event("page_visit", {"user_agent": "streamlit_user"})
-log_event("page_visit", {"user_agent": "streamlit_user"})
 
 # Constants
 MODEL_DIR = Path("model_output")
@@ -323,18 +322,6 @@ def main():
     st.title("📰 AI-Assisted Headline Hunter")
     st.write("**Predict engagement and optimize headlines with AI-powered rewriting**")
 
-    if st.button("Predict CTR"):
-        log_event("ctr_prediction", {"action": "button_clicked"})
-        # Your existing code...
-
-    if st.button("Rewrite Headlines"):
-        log_event("headline_rewrite", {"action": "button_clicked"})
-        # Your existing code...
-
-    # For any text input:
-    if st.text_input("Your label here"):
-        log_event("user_input", {"input_type": "text_entered"})
-
     # Load all systems once at startup
     with st.spinner("Loading AI systems..."):
         model_pipeline = load_model()
@@ -342,60 +329,42 @@ def main():
         search_system = load_search_system()
         llm_rewriter = load_llm_rewriter()
 
-        # Add this to your sidebar for admin analytics
-        st.sidebar.markdown("---")
-        if (
-            st.sidebar.text_input("📊 Analytics (Enter: admin)", type="password")
-            == "admin"
-        ):
-            logs = get_usage_stats()
-            st.sidebar.metric("Total Interactions", len(logs))
-            st.sidebar.metric(
-                "CTR Predictions",
-                len([l for l in logs if l["event"] == "ctr_prediction"]),
-            )
-            st.sidebar.metric(
-                "Headlines Rewritten",
-                len([l for l in logs if l["event"] == "headline_rewrite"]),
-            )
-            st.sidebar.metric(
-                "Searches Made", len([l for l in logs if l["event"] == "search"])
+    # ENHANCED ADMIN PANEL WITH DOWNLOAD BUTTON
+    st.sidebar.markdown("---")
+    if st.sidebar.text_input("📊 Analytics (Enter: admin)", type="password") == "admin":
+        logs = get_usage_stats()
+        st.sidebar.success("✅ Admin Mode Activated")
+
+        # Metrics
+        st.sidebar.metric("Total Interactions", len(logs))
+        st.sidebar.metric(
+            "CTR Predictions",
+            len([l for l in logs if l["event"] == "ctr_prediction"]),
+        )
+        st.sidebar.metric(
+            "Headlines Rewritten",
+            len([l for l in logs if l["event"] == "headline_rewrite"]),
+        )
+        st.sidebar.metric(
+            "Searches Made", len([l for l in logs if l["event"] == "search"])
+        )
+
+        # Download button
+        if logs:
+            log_data = "\n".join([json.dumps(log) for log in logs])
+            st.sidebar.download_button(
+                label="📥 Download Analytics Data",
+                data=log_data,
+                file_name=f"headline_hunter_analytics_{datetime.date.today()}.txt",
+                mime="text/plain",
             )
 
             # Show recent activity
-            if logs:
-                st.sidebar.write("**Recent Activity:**")
-                for log in logs[-5:]:  # Last 5 events
-                    st.sidebar.caption(f"{log['event']} - {log['timestamp'][:16]}")
-
-    # # Sidebar status
-    # st.sidebar.header("🎯 System Status")
-    # if model_pipeline:
-    #     st.sidebar.success(f"✅ Model: {model_pipeline['model_name']}")
-    #     if "auc" in model_pipeline.get("performance", {}):
-    #         st.sidebar.info(f"📊 AUC: {model_pipeline['performance']['auc']:.4f}")
-    # else:
-    #     st.sidebar.error("❌ Model not loaded")
-
-    # if preprocessing_components:
-    #     st.sidebar.success("✅ Preprocessing: Components loaded")
-    #     st.sidebar.info(
-    #         f"📈 Features: {len(preprocessing_components.get('feature_order', []))}"
-    #     )
-    # else:
-    #     st.sidebar.error("❌ Preprocessing components not loaded")
-
-    # if search_system:
-    #     st.sidebar.success(
-    #         f"✅ Search: {search_system['metadata']['total_articles']:,} articles"
-    #     )
-    # else:
-    #     st.sidebar.error("❌ Search system not loaded")
-
-    # if llm_rewriter:
-    #     st.sidebar.success("✅ AI Rewriter: Available")
-    # else:
-    #     st.sidebar.warning("⚠️ AI Rewriter: Not available")
+            st.sidebar.write("**📈 Recent Activity:**")
+            for log in logs[-5:]:  # Last 5 events
+                st.sidebar.caption(f"• {log['event']} - {log['timestamp'][11:16]}")
+        else:
+            st.sidebar.info("No analytics data yet")
 
     # Main tabs
     tab1, tab2, tab3 = st.tabs(
@@ -461,11 +430,20 @@ def main():
                 unsafe_allow_html=True,
             )
 
-        # Process prediction and rewriting
-        # Initialize button state
-        # predict_and_rewrite = False
+        # Process prediction and rewriting - FIXED VERSION
         if predict_and_rewrite:
             if title.strip():
+                # Log the event with actual data
+                log_event(
+                    "ctr_prediction",
+                    {
+                        "headline": title,
+                        "category": category,
+                        "headline_length": len(title),
+                        "word_count": len(title.split()),
+                    },
+                )
+
                 if model_pipeline and preprocessing_components:
                     # Step 1: Predict engagement
                     with st.spinner("🔮 Analyzing engagement potential..."):
@@ -509,9 +487,6 @@ def main():
                             st.metric("Estimated CTR", f"{ctr_percentage:.2f}%")
                             st.caption(f"Threshold: {threshold*100:.1f}%")
 
-                        # with col_pred3:
-                        #     st.metric("Confidence", f"{result['confidence']:.1%}")
-
                         # Step 2: Generate AI rewrites
                         st.subheader("✨ AI-Optimized Headlines")
 
@@ -534,6 +509,16 @@ def main():
                                     ):
                                         best_headline = rewrite_result["best_headline"]
 
+                                        # Log the rewrite event
+                                        log_event(
+                                            "headline_rewrite",
+                                            {
+                                                "original": title,
+                                                "rewritten": best_headline,
+                                                "category": category,
+                                            },
+                                        )
+
                                         if best_headline.strip() != title.strip():
                                             # Predict engagement for the rewritten headline
                                             rewritten_result = predict_engagement(
@@ -553,9 +538,6 @@ def main():
                                                 st.write(
                                                     f"CTR: {result['estimated_ctr']*100:.2f}%"
                                                 )
-                                                # st.write(
-                                                #     f"Engagement: {result['engagement_probability']:.1%}"
-                                                # )
 
                                             with col_rewrite:
                                                 st.markdown(
@@ -567,9 +549,6 @@ def main():
                                                     st.write(
                                                         f"CTR: {rewritten_result['estimated_ctr']*100:.2f}%"
                                                     )
-                                                    # st.write(
-                                                    #     f"Engagement: {rewritten_result['engagement_probability']:.1%}"
-                                                    # )
 
                                                     # Show improvement
                                                     ctr_improvement = (
@@ -672,6 +651,12 @@ def main():
 
         if st.button("🔍 Search", type="primary"):
             if search_query.strip() and search_system:
+                # Log the search event
+                log_event(
+                    "search",
+                    {"query": search_query, "num_results_requested": num_results},
+                )
+
                 with st.spinner("Searching articles..."):
                     try:
                         embedder = load_embedder()
