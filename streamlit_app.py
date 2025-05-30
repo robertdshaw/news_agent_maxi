@@ -389,7 +389,7 @@ def main():
 
         # Process prediction and rewriting
         # Initialize button state
-        predict_and_rewrite = False
+        # predict_and_rewrite = False
         if predict_and_rewrite:
             if title.strip():
                 if model_pipeline and preprocessing_components:
