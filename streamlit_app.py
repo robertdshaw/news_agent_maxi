@@ -347,18 +347,15 @@ def predict_engagement(
         feature_order = components.get("feature_order", [])
 
         if feature_order:
-            # Use the exact feature order from training
-            feature_vector = []
-            for feat_name in feature_order:
-                feature_vector.append(features.get(feat_name, 0.0))
+            feature_vector = [
+                features.get(feat_name, 0.0) for feat_name in feature_order
+            ]
         elif hasattr(model_pipeline["model"], "feature_names_in_"):
-            # Fallback to model's expected features
             expected_features = list(model_pipeline["model"].feature_names_in_)
-            feature_vector = []
-            for feat_name in expected_features:
-                feature_vector.append(features.get(feat_name, 0.0))
+            feature_vector = [
+                features.get(feat_name, 0.0) for feat_name in expected_features
+            ]
         else:
-            # Last resort: use all features in sorted order
             feature_vector = [features[k] for k in sorted(features.keys())]
 
         feature_vector = np.array(feature_vector).reshape(1, -1)
@@ -369,9 +366,7 @@ def predict_engagement(
 
         # Convert engagement probability to estimated CTR
         engagement_prob = float(prediction_proba[1])
-        estimated_ctr = max(
-            0.01, engagement_prob * 0.1
-        )  # Scale to reasonable CTR range
+        estimated_ctr = max(0.01, engagement_prob * 0.1)
 
         return {
             "high_engagement": bool(prediction),
@@ -382,7 +377,7 @@ def predict_engagement(
         }
 
     except Exception as e:
-        st.error(f"Error in prediction: {e}")
+        print(f"Error in prediction: {e}")  # This will show in terminal
         return None
 
 
