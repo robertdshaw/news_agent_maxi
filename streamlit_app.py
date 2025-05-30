@@ -393,7 +393,53 @@ def main():
     st.markdown(
         "**Predict engagement and optimize headlines with AI-powered rewriting**"
     )
+    if predict_and_rewrite:
+        if title.strip():
+            with st.spinner("Analyzing your article..."):
+                # Use the preprocessing_components you already loaded
+                result = predict_engagement(
+                    title,
+                    "",
+                    category,
+                    model_pipeline,  # Use the one from top
+                    preprocessing_components,  # Use the one from top
+                )
 
+            if result and isinstance(result, dict):
+                # Display prediction results
+                st.subheader("📊 Engagement Prediction")
+                # ... your prediction display code ...
+
+                # Use the llm_rewriter you already loaded
+                if (
+                    llm_rewriter
+                ):  # Use the one from top, don't call load_llm_rewriter() again
+                    try:
+                        article_data = {
+                            "category": category,
+                            "abstract": "",
+                            "current_ctr": result["estimated_ctr"],
+                        }
+
+                        rewritten_headline = llm_rewriter.get_best_headline(
+                            title, article_data
+                        )
+
+                        if rewritten_headline and rewritten_headline != title:
+                            st.subheader("✨ AI-Optimized Headlines")
+                            st.success(f"**Optimized:** {rewritten_headline}")
+                        else:
+                            st.info("Original headline is already optimized!")
+
+                    except Exception as e:
+                        st.error(f"Rewriting failed: {e}")
+                        import traceback
+
+                        st.code(traceback.format_exc())
+                else:
+                    st.error("LLM Rewriter not available")
+            else:
+                st.error("Prediction failed")
     # # Sidebar
     # st.sidebar.header("🎯 System Status")
     # if model_pipeline:
@@ -543,49 +589,6 @@ def main():
                         st.error("Model or components failed to load")
                 else:
                     st.warning("Please enter an article title.")
-    # In your streamlit_app.py, after the prediction succeeds, add:
-
-    if result and isinstance(result, dict):
-        # ... your prediction display code ...
-
-        # DEBUG: Check if rewriter section is reached
-        st.write("🔍 **Debug: Starting rewrite process...**")
-
-        # Load the rewriter
-        st.write("Loading LLM rewriter...")
-        rewriter = load_llm_rewriter()
-        st.write(f"Rewriter loaded: {rewriter is not None}")
-
-        if rewriter:
-            st.write("🔍 **Attempting to rewrite headline...**")
-            try:
-                # Get the best headline
-                article_data = {
-                    "category": category,
-                    "abstract": "",  # or whatever abstract you have
-                    "current_ctr": result["estimated_ctr"],
-                }
-
-                st.write(f"Article data: {article_data}")
-
-                rewritten_headline = rewriter.get_best_headline(title, article_data)
-                st.write(f"🔍 **Rewritten headline:** '{rewritten_headline}'")
-
-                if rewritten_headline and rewritten_headline != title:
-                    st.subheader("✨ AI-Optimized Headlines")
-                    st.success(f"**Optimized:** {rewritten_headline}")
-                else:
-                    st.warning(
-                        "No improvement suggested - original headline is already good!"
-                    )
-
-            except Exception as e:
-                st.error(f"❌ Rewriting failed: {e}")
-                import traceback
-
-                st.code(traceback.format_exc())
-        else:
-            st.error("❌ LLM Rewriter failed to load")
 
         with col2:
             # Tips and guidelines
