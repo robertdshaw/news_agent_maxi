@@ -32,7 +32,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from textstat import flesch_reading_ease
 import warnings
-from llm_rewriter import LLMHeadlineRewriter
+from llm_rewriter import EfficientLLMHeadlineRewriter
 from feature_utils import create_article_features_exact, load_preprocessing_components
 
 warnings.filterwarnings("ignore")
@@ -125,8 +125,20 @@ def load_search_system():
 
 @st.cache_resource
 def load_llm_rewriter():
-    """Load the LLM headline rewriter"""
-    return LLMHeadlineRewriter()
+    """Load the efficient LLM headline rewriter"""
+    model_pipeline = load_model()
+    components = load_preprocessing_components()
+    return EfficientLLMHeadlineRewriter(
+        model_pipeline=model_pipeline,
+        components=components,
+        eda_insights_path="headline_eda_insights.json",  # Optional
+    )
+
+
+# @st.cache_resource
+# def load_llm_rewriter():
+#     """Load the LLM headline rewriter"""
+#     return LLMHeadlineRewriter()
 
 
 @st.cache_resource
