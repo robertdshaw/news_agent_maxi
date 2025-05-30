@@ -1,0 +1,19 @@
+# ── 1. Python env & secrets ─────────────────────────────────────────────────
+/venv/
+/.env
+.config/
+/.emergency_save/
+/.preprocess_EDA_fe/
+
+# ── 2. Notebooks & progress logs ────────────────────────────────────────────
+.EDA_3.ipynb
+/df_train_progress.parquet
+/df_test_progress.parquet
+/df_val_progress.parquet
+
+# ── 3. Generated or rebuildable data ────────────────────────────────────────
+/source_data/
+/model_output/
+/images/
+
+# ── End of .gitignore ───────────────────────────────────────────────────────

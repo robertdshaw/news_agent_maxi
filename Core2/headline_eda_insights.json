@@ -1,0 +1,450 @@
+{
+  "baseline_metrics": {
+    "overall_avg_ctr": 0.041238101089957464,
+    "overall_median_ctr": 0.019230769230769232,
+    "training_median_ctr": 0.019230769230769232,
+    "median_ctr": 0.019230769230769232,
+    "high_engagement_avg_ctr": 0.12011476895121741,
+    "low_engagement_avg_ctr": 0.012703341582221063,
+    "high_engagement_rate": 0.26565850772757527,
+    "ctr_threshold": 0.05,
+    "std_ctr": 0.07559847318530703,
+    "min_ctr": 0.0,
+    "max_ctr": 1.0
+  },
+  "feature_improvements": {
+    "has_question": {
+      "with_feature_ctr": 0.039906063365609354,
+      "without_feature_ctr": 0.04130699244838735,
+      "improvement_percent": -3.391505892200796,
+      "sample_size_with": 1330,
+      "sample_size_without": 25716
+    },
+    "has_exclamation": {
+      "with_feature_ctr": 0.03252965158073658,
+      "without_feature_ctr": 0.04133446374620903,
+      "improvement_percent": -21.301382351379797,
+      "sample_size_with": 296,
+      "sample_size_without": 26750
+    },
+    "has_number": {
+      "with_feature_ctr": 0.04040655746003882,
+      "without_feature_ctr": 0.04158323977128141,
+      "improvement_percent": -2.8297033076658846,
+      "sample_size_with": 7933,
+      "sample_size_without": 19113
+    },
+    "has_colon": {
+      "with_feature_ctr": 0.046498358303664444,
+      "without_feature_ctr": 0.039883353114566984,
+      "improvement_percent": 16.585880254590222,
+      "sample_size_with": 5539,
+      "sample_size_without": 21507
+    },
+    "has_quotes": {
+      "with_feature_ctr": 0.042708444795829,
+      "without_feature_ctr": 0.04061721026338256,
+      "improvement_percent": 5.1486414721390625,
+      "sample_size_with": 8030,
+      "sample_size_without": 19016
+    },
+    "has_dash": {
+      "with_feature_ctr": 0.04320991075694464,
+      "without_feature_ctr": 0.04087693187539535,
+      "improvement_percent": 5.707323848719572,
+      "sample_size_with": 4187,
+      "sample_size_without": 22859
+    },
+    "has_abstract": {
+      "with_feature_ctr": 0.04052510554702023,
+      "without_feature_ctr": 0.053203394471596374,
+      "improvement_percent": -23.829849674995234,
+      "sample_size_with": 25525,
+      "sample_size_without": 1521
+    },
+    "needs_readability_improvement": {
+      "with_feature_ctr": 0.042144892831954044,
+      "without_feature_ctr": 0.04029142476559677,
+      "improvement_percent": 4.600155187214607,
+      "sample_size_with": 13814,
+      "sample_size_without": 13232
+    },
+    "suboptimal_word_count": {
+      "with_feature_ctr": 0.04163379902384174,
+      "without_feature_ctr": 0.040971625634420014,
+      "improvement_percent": 1.61617553408825,
+      "sample_size_with": 10884,
+      "sample_size_without": 16162
+    },
+    "too_long_title": {
+      "with_feature_ctr": 0.047445471617447964,
+      "without_feature_ctr": 0.03888342840618174,
+      "improvement_percent": 22.01977439290055,
+      "sample_size_with": 7438,
+      "sample_size_without": 19608
+    }
+  },
+  "top_features_by_impact": [
+    [
+      "too_long_title",
+      22.01977439290055,
+      0.047445471617447964,
+      7438
+    ],
+    [
+      "has_colon",
+      16.585880254590222,
+      0.046498358303664444,
+      5539
+    ],
+    [
+      "has_dash",
+      5.707323848719572,
+      0.04320991075694464,
+      4187
+    ],
+    [
+      "has_quotes",
+      5.1486414721390625,
+      0.042708444795829,
+      8030
+    ],
+    [
+      "needs_readability_improvement",
+      4.600155187214607,
+      0.042144892831954044,
+      13814
+    ],
+    [
+      "suboptimal_word_count",
+      1.61617553408825,
+      0.04163379902384174,
+      10884
+    ]
+  ],
+  "editorial_strategies": {
+    "colon_headlines": {
+      "avg_ctr_improvement": 0.1658588025459022,
+      "success_rate": 0.29716555334898,
+      "feature_name": "has_colon",
+      "sample_size": 5539,
+      "with_feature_ctr": 0.046498358303664444,
+      "without_feature_ctr": 0.039883353114566984
+    },
+    "dash_headlines": {
+      "avg_ctr_improvement": 0.05707323848719572,
+      "success_rate": 0.2909004060186291,
+      "feature_name": "has_dash",
+      "sample_size": 4187,
+      "with_feature_ctr": 0.04320991075694464,
+      "without_feature_ctr": 0.04087693187539535
+    }
+  },
+  "optimal_ranges": {
+    "word_count": {
+      "3-6": {
+        "avg_ctr": 0.0330461369114777,
+        "median_ctr": 0.007092555331991952,
+        "count": 1088,
+        "high_engagement_rate": 0.1948529411764706
+      },
+      "6-8": {
+        "avg_ctr": 0.03572589891766739,
+        "median_ctr": 0.013888888888888888,
+        "count": 3090,
+        "high_engagement_rate": 0.2203883495145631
+      },
+      "8-10": {
+        "avg_ctr": 0.03916219116029039,
+        "median_ctr": 0.017699115044247787,
+        "count": 6481,
+        "high_engagement_rate": 0.24980712852954792
+      },
+      "10-12": {
+        "avg_ctr": 0.04163763213301298,
+        "median_ctr": 0.020356234096692113,
+        "count": 7003,
+        "high_engagement_rate": 0.2657432528916179
+      },
+      "12-15": {
+        "avg_ctr": 0.044213125448005194,
+        "median_ctr": 0.02207913552161196,
+        "count": 6348,
+        "high_engagement_rate": 0.2959987397605545
+      },
+      "15-20": {
+        "avg_ctr": 0.04807482257709231,
+        "median_ctr": 0.026051454404130984,
+        "count": 2646,
+        "high_engagement_rate": 0.3204837490551776
+      }
+    },
+    "character_length": {
+      "20-40": {
+        "avg_ctr": 0.034361328605271926,
+        "median_ctr": 0.010526315789473684,
+        "count": 2013,
+        "high_engagement_rate": 0.19970193740685543
+      },
+      "40-50": {
+        "avg_ctr": 0.03568276959438538,
+        "median_ctr": 0.014388489208633094,
+        "count": 3207,
+        "high_engagement_rate": 0.2182725288431556
+      },
+      "50-60": {
+        "avg_ctr": 0.03868981541472701,
+        "median_ctr": 0.01720898809854332,
+        "count": 5792,
+        "high_engagement_rate": 0.24378453038674033
+      },
+      "60-70": {
+        "avg_ctr": 0.040930164872128014,
+        "median_ctr": 0.019692425876408976,
+        "count": 5704,
+        "high_engagement_rate": 0.26192145862552596
+      },
+      "70-80": {
+        "avg_ctr": 0.04469824620019917,
+        "median_ctr": 0.023121387283236993,
+        "count": 4289,
+        "high_engagement_rate": 0.30473303800419677
+      },
+      "80-100": {
+        "avg_ctr": 0.046854451352506876,
+        "median_ctr": 0.025,
+        "count": 4737,
+        "high_engagement_rate": 0.30926746886214906
+      }
+    },
+    "readability": {
+      "0-30": {
+        "avg_ctr": 0.04103374328464395,
+        "median_ctr": 0.021052631578947368,
+        "count": 3093,
+        "high_engagement_rate": 0.279017135467184
+      },
+      "30-50": {
+        "avg_ctr": 0.04325221967815192,
+        "median_ctr": 0.02074904319300164,
+        "count": 5887,
+        "high_engagement_rate": 0.27790045863767626
+      },
+      "50-70": {
+        "avg_ctr": 0.04228291929033863,
+        "median_ctr": 0.020103651377361753,
+        "count": 9216,
+        "high_engagement_rate": 0.2775607638888889
+      },
+      "70-90": {
+        "avg_ctr": 0.04011538848284205,
+        "median_ctr": 0.018018018018018018,
+        "count": 6465,
+        "high_engagement_rate": 0.2479505027068832
+      },
+      "90-100": {
+        "avg_ctr": 0.03878097188573511,
+        "median_ctr": 0.012582015842126681,
+        "count": 1140,
+        "high_engagement_rate": 0.2236842105263158
+      }
+    }
+  },
+  "category_performance": {
+    "entertainment": {
+      "avg_ctr": 0.029758161220441295,
+      "median_ctr": 0.01275240677665556,
+      "std_ctr": 0.06461103865706433,
+      "count": 359,
+      "high_engagement_rate": 0.19498607242339833,
+      "top_10_percent_threshold": 0.07692307692307693,
+      "needs_rewrite_rate": 0.5738161559888579
+    },
+    "lifestyle": {
+      "avg_ctr": 0.026345789046796755,
+      "median_ctr": 0.009694905569589799,
+      "std_ctr": 0.06795742925200732,
+      "count": 1698,
+      "high_engagement_rate": 0.13663133097762073,
+      "top_10_percent_threshold": 0.06224903424807682,
+      "needs_rewrite_rate": 0.6154299175500589
+    },
+    "travel": {
+      "avg_ctr": 0.03261290507011418,
+      "median_ctr": 0.014635130237194097,
+      "std_ctr": 0.06588910501882485,
+      "count": 1476,
+      "high_engagement_rate": 0.20392953929539295,
+      "top_10_percent_threshold": 0.08027504911591356,
+      "needs_rewrite_rate": 0.556910569105691
+    },
+    "sports": {
+      "avg_ctr": 0.05698308963625131,
+      "median_ctr": 0.030303030303030304,
+      "std_ctr": 0.08773386070358587,
+      "count": 7631,
+      "high_engagement_rate": 0.37950465207705414,
+      "top_10_percent_threshold": 0.14545454545454545,
+      "needs_rewrite_rate": 0.4223561787445944
+    },
+    "news": {
+      "avg_ctr": 0.039659654199818685,
+      "median_ctr": 0.02077695472056764,
+      "std_ctr": 0.06749066328771319,
+      "count": 7322,
+      "high_engagement_rate": 0.2697350450696531,
+      "top_10_percent_threshold": 0.09907386632339502,
+      "needs_rewrite_rate": 0.4826550122917236
+    },
+    "movies": {
+      "avg_ctr": 0.027115718328220455,
+      "median_ctr": 0.01042113137789397,
+      "std_ctr": 0.06614785052519974,
+      "count": 308,
+      "high_engagement_rate": 0.15584415584415584,
+      "top_10_percent_threshold": 0.07163806711136007,
+      "needs_rewrite_rate": 0.6201298701298701
+    },
+    "health": {
+      "avg_ctr": 0.027735043380081873,
+      "median_ctr": 0.012300123001230012,
+      "std_ctr": 0.0684403812639692,
+      "count": 1003,
+      "high_engagement_rate": 0.14556331006979062,
+      "top_10_percent_threshold": 0.0651240516307026,
+      "needs_rewrite_rate": 0.5972083748753739
+    },
+    "finance": {
+      "avg_ctr": 0.031336298201204114,
+      "median_ctr": 0.014563106796116505,
+      "std_ctr": 0.06154664098682491,
+      "count": 1677,
+      "high_engagement_rate": 0.18962432915921287,
+      "top_10_percent_threshold": 0.07692307692307693,
+      "needs_rewrite_rate": 0.5587358378056052
+    },
+    "video": {
+      "avg_ctr": 0.037620964489327946,
+      "median_ctr": 0.012709196310176037,
+      "std_ctr": 0.08609216635085545,
+      "count": 1344,
+      "high_engagement_rate": 0.22916666666666666,
+      "top_10_percent_threshold": 0.09090909090909091,
+      "needs_rewrite_rate": 0.5528273809523809
+    },
+    "weather": {
+      "avg_ctr": 0.03897470862330629,
+      "median_ctr": 0.022497216317441036,
+      "std_ctr": 0.06265580705747398,
+      "count": 1136,
+      "high_engagement_rate": 0.2596830985915493,
+      "top_10_percent_threshold": 0.09090909090909091,
+      "needs_rewrite_rate": 0.4665492957746479
+    },
+    "foodanddrink": {
+      "avg_ctr": 0.032267632790689525,
+      "median_ctr": 0.014177148228437417,
+      "std_ctr": 0.07699999410210158,
+      "count": 1346,
+      "high_engagement_rate": 0.17013372956909362,
+      "top_10_percent_threshold": 0.07307398932112891,
+      "needs_rewrite_rate": 0.5638930163447251
+    },
+    "autos": {
+      "avg_ctr": 0.038620180348233835,
+      "median_ctr": 0.017094017094017096,
+      "std_ctr": 0.08387767650976137,
+      "count": 883,
+      "high_engagement_rate": 0.23442808607021517,
+      "top_10_percent_threshold": 0.09373786407767008,
+      "needs_rewrite_rate": 0.5254813137032842
+    },
+    "music": {
+      "avg_ctr": 0.03071454007002984,
+      "median_ctr": 0.01676318195672051,
+      "std_ctr": 0.0511820024158079,
+      "count": 409,
+      "high_engagement_rate": 0.1784841075794621,
+      "top_10_percent_threshold": 0.07924338216396812,
+      "needs_rewrite_rate": 0.5183374083129584
+    },
+    "tv": {
+      "avg_ctr": 0.03241230141079698,
+      "median_ctr": 0.022933467741935484,
+      "std_ctr": 0.04005963070552623,
+      "count": 359,
+      "high_engagement_rate": 0.23676880222841226,
+      "top_10_percent_threshold": 0.0791578947368421,
+      "needs_rewrite_rate": 0.4596100278551532
+    },
+    "kids": {
+      "avg_ctr": 0.013015738409157603,
+      "median_ctr": 0.0,
+      "std_ctr": 0.1035280465564142,
+      "count": 94,
+      "high_engagement_rate": 0.02127659574468085,
+      "top_10_percent_threshold": 0.0,
+      "needs_rewrite_rate": 0.9574468085106383
+    }
+  },
+  "high_performers": {
+    "threshold_ctr": 0.10526315789473684,
+    "count": 2709,
+    "avg_ctr": 0.19974508929128956,
+    "median_word_count": 11.0,
+    "median_length": 67.0,
+    "avg_readability": 55.9097318799327,
+    "sample_headlines": [
+      "Former Gov. Deval Patrick Considering Run For President",
+      "Unclaimed Veteran Laid To Rest At Cemetery Of The Alleghenies With Full Military Honors",
+      "Miami Weather: Encroaching Cold Front Set To Drop Temperatures This Weekend After Another Round Of Storms",
+      "Video Captures Moment of Structure Collapse in New Orleans",
+      "Former Deep Ellum Bartender Indicted On Assault Charges Stemming From Brutal Attack",
+      "State volleyball: Ankeny sweeps Council Bluffs Lincoln to reach Class 5A semifinals",
+      "Todd has 'Breakfast with Friends' in Tuscaloosa, Alabama",
+      "2021 Harley-Davidson Bronx Streetfighter Preview",
+      "Lady Gaga Shared Her Post-Show Recovery Routine and It Sounds Excruciating",
+      "15 Vegan Desserts Your Kids Will Love"
+    ],
+    "question_rate": 0.05389442598744924,
+    "number_rate": 0.2916205241786637,
+    "colon_rate": 0.26393503137689184
+  },
+  "patterns": {
+    "overall_avg_ctr": 0.041238101089957464,
+    "overall_median_ctr": 0.019230769230769232,
+    "total_articles": 27046,
+    "high_engagement_count": 7185,
+    "low_engagement_count": 19861
+  },
+  "editorial_effectiveness": {
+    "readability_score_correlation": -0.012031932617366146,
+    "headline_score_correlation": 0.01528834778072571,
+    "combined_score_correlation": -0.0018774690262467542
+  },
+  "readability_insights": {
+    "optimal_flesch_score": 65,
+    "optimal_word_count": {
+      "min": 8,
+      "max": 12
+    },
+    "optimal_char_count": {
+      "min": 45,
+      "max": 75
+    },
+    "readability_improvement_threshold": 10
+  },
+  "engagement_patterns": {
+    "high_engagement_features": [
+      "has_question",
+      "has_number",
+      "has_colon",
+      "optimal_word_count"
+    ],
+    "low_engagement_patterns": [
+      "too_long_title",
+      "suboptimal_word_count",
+      "needs_readability_improvement"
+    ]
+  }
+}

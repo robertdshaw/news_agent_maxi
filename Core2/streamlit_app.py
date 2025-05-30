@@ -24,38 +24,6 @@ from feature_utils import create_article_features_exact, load_preprocessing_comp
 
 warnings.filterwarnings("ignore")
 
-import streamlit as st
-import datetime
-import json
-import os
-
-
-# Add this logging function at the top, after your imports
-def log_event(event_type, data):
-    """Log events to track user behavior"""
-    log_entry = {
-        "timestamp": datetime.datetime.now().isoformat(),
-        "event": event_type,
-        "data": data,
-    }
-
-    try:
-        with open("usage_log.txt", "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
-    except:
-        pass  # Fail silently if can't write
-
-
-def get_usage_stats():
-    """Read usage statistics"""
-    try:
-        with open("usage_log.txt", "r") as f:
-            logs = [json.loads(line) for line in f]
-        return logs
-    except:
-        return []
-
-
 # Page configuration
 st.set_page_config(
     page_title="Article Engagement Predictor & Rewriter",
@@ -63,10 +31,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
-# Add this to track page visits
-log_event("page_visit", {"user_agent": "streamlit_user"})
-log_event("page_visit", {"user_agent": "streamlit_user"})
 
 # Constants
 MODEL_DIR = Path("model_output")
@@ -323,50 +287,12 @@ def main():
     st.title("📰 AI-Assisted Headline Hunter")
     st.write("**Predict engagement and optimize headlines with AI-powered rewriting**")
 
-    if st.button("Predict CTR"):
-        log_event("ctr_prediction", {"action": "button_clicked"})
-        # Your existing code...
-
-    if st.button("Rewrite Headlines"):
-        log_event("headline_rewrite", {"action": "button_clicked"})
-        # Your existing code...
-
-    # For any text input:
-    if st.text_input("Your label here"):
-        log_event("user_input", {"input_type": "text_entered"})
-
     # Load all systems once at startup
     with st.spinner("Loading AI systems..."):
         model_pipeline = load_model()
         preprocessing_components = load_preprocessing_components()
         search_system = load_search_system()
         llm_rewriter = load_llm_rewriter()
-
-        # Add this to your sidebar for admin analytics
-        st.sidebar.markdown("---")
-        if (
-            st.sidebar.text_input("📊 Analytics (Enter: admin)", type="password")
-            == "admin"
-        ):
-            logs = get_usage_stats()
-            st.sidebar.metric("Total Interactions", len(logs))
-            st.sidebar.metric(
-                "CTR Predictions",
-                len([l for l in logs if l["event"] == "ctr_prediction"]),
-            )
-            st.sidebar.metric(
-                "Headlines Rewritten",
-                len([l for l in logs if l["event"] == "headline_rewrite"]),
-            )
-            st.sidebar.metric(
-                "Searches Made", len([l for l in logs if l["event"] == "search"])
-            )
-
-            # Show recent activity
-            if logs:
-                st.sidebar.write("**Recent Activity:**")
-                for log in logs[-5:]:  # Last 5 events
-                    st.sidebar.caption(f"{log['event']} - {log['timestamp'][:16]}")
 
     # # Sidebar status
     # st.sidebar.header("🎯 System Status")
