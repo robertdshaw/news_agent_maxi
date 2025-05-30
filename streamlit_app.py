@@ -123,7 +123,7 @@ def load_search_system():
         return None
 
 
-@st.cache_resource
+# @st.cache_resource  # Temporarily disabled
 def load_llm_rewriter():
     """Load the efficient LLM headline rewriter"""
     try:
@@ -131,11 +131,25 @@ def load_llm_rewriter():
         components = load_preprocessing_components()
 
         if model_pipeline and components:
-            return EfficientLLMHeadlineRewriter(
-                model_pipeline=model_pipeline,
-                components=components,
-                eda_insights_path="headline_eda_insights.json",  # Optional
-            )
+            try:
+                # Try the efficient rewriter first
+                return EfficientLLMHeadlineRewriter(
+                    model_pipeline=model_pipeline,
+                    components=components,
+                    eda_insights_path="headline_eda_insights.json",  # Optional
+                )
+            except Exception as e:
+                st.warning(f"EfficientLLMHeadlineRewriter failed: {e}")
+                # Fall back to basic LLM rewriter
+                try:
+                    from llm_rewriter import LLMHeadlineRewriter
+
+                    return LLMHeadlineRewriter(
+                        model_pipeline=model_pipeline, components=components
+                    )
+                except Exception as e2:
+                    st.warning(f"Basic LLMHeadlineRewriter also failed: {e2}")
+                    return None
         else:
             st.warning("Could not load model pipeline or components for rewriter")
             return None
@@ -208,6 +222,13 @@ def predict_engagement(
 def main():
     st.title("📰 AI-Assisted Headline Hunter")
     st.write("**Predict engagement and optimize headlines with AI-powered rewriting**")
+
+    # Temporary: Add cache clear button
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        if st.button("🔄 Clear Cache"):
+            st.cache_resource.clear()
+            st.rerun()
 
     # Load all systems once at startup
     with st.spinner("Loading AI systems..."):
