@@ -55,8 +55,8 @@ def get_usage_stats():
 
 # Page configuration
 st.set_page_config(
-    page_title="AI Headline Optimizer",
-    page_icon="🚀",
+    page_title="Headline Hunter",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -832,14 +832,13 @@ def main():
     # Footer
     st.markdown("---")
     st.markdown(
-        "**AI Headline Optimizer** | Built with Streamlit, XGBoost, and OpenAI | "
+        "**Headline Hunter** | Built with Streamlit, XGBoost, and OpenAI | "
         "Boost your content engagement with data-driven headline optimization"
     )
 
 
 if __name__ == "__main__":
     main()
-
 # import os
 # import torch
 
