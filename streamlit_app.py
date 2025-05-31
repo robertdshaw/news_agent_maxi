@@ -424,11 +424,17 @@ def process_batch_headlines(uploaded_file, llm_rewriter, model_pipeline, compone
 
 
 def main():
-    # Header
+    # Header with custom logo
     st.markdown(
         """
     <div class="main-header">
-        <h1>🚀 AI Headline Optimizer</h1>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 1rem;">
+            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8IS0tIE9yYW5nZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iMTUiIHkxPSIxNSIgeDI9IjQ1IiB5Mj0iNDUiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMjAiIHkxPSIxMCIgeDI9IjUwIiB5Mj0iNDAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMTAiIHkxPSIyMCIgeDI9IjQwIiB5Mj0iNTAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8IS0tIFB1cnBsZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iNDUiIHkxPSIxNSIgeDI9IjE1IiB5Mj0iNDUiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNTAiIHkxPSIyMCIgeDI9IjIwIiB5Mj0iNTAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNDAiIHkxPSIxMCIgeDI9IjEwIiB5Mj0iNDAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+" 
+                 style="width: 50px; height: 50px;" alt="Logo">
+            <div>
+                <h1 style="margin: 0; color: white; font-size: 2.5rem;">AI Headline Optimizer</h1>
+            </div>
+        </div>
         <p>Boost your headline performance with AI-powered optimization</p>
     </div>
     """,
@@ -638,14 +644,9 @@ def main():
 
     elif mode == "📊 Batch Upload":
         # Batch upload section
-        st.markdown(
-            """
-        <div class="batch-section">
-            <h3>📊 Batch Headline Optimization</h3>
-            <p>Upload a CSV file with headlines to optimize multiple headlines at once</p>
-        </div>
-        """,
-            unsafe_allow_html=True,
+        st.subheader("📊 Batch Headline Optimization")
+        st.write(
+            "Upload a CSV file with headlines to optimize multiple headlines at once"
         )
 
         # File upload
@@ -739,23 +740,43 @@ def main():
         st.subheader("⚖️ Compare Headlines Side-by-Side")
         st.write("Test multiple headline variations against each other")
 
-        # Input multiple headlines
-        num_headlines = st.slider("Number of headlines to compare:", 2, 5, 3)
+        # Better UX layout for both desktop and mobile
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            # Input multiple headlines
+            num_headlines = st.slider("Number of headlines to compare:", 2, 5, 3)
+
+        with col2:
+            # Category selection in a column for better mobile UX
+            category = st.selectbox(
+                "Category:",
+                ["news", "sports", "finance", "travel", "lifestyle", "health"],
+                help="Category will be applied to all headlines",
+            )
+
+        st.markdown("### Enter Headlines to Compare")
 
         headlines = []
-        category = st.selectbox(
-            "Category for all headlines:",
-            ["news", "sports", "finance", "travel", "lifestyle", "health"],
-        )
+        # Use responsive columns that stack on mobile
+        if num_headlines <= 2:
+            cols = st.columns(2)
+        elif num_headlines <= 3:
+            cols = st.columns(3)
+        else:
+            cols = st.columns(2)  # For 4-5 headlines, use 2 columns to avoid cramping
 
         for i in range(num_headlines):
-            headline = st.text_input(
-                f"Headline {i+1}:",
-                placeholder=f"Enter headline {i+1}...",
-                key=f"headline_{i}",
-            )
-            if headline.strip():
-                headlines.append(headline)
+            col_idx = i % len(cols)
+            with cols[col_idx]:
+                headline = st.text_area(
+                    f"Headline {i+1}:",
+                    placeholder=f"Enter headline {i+1}...",
+                    key=f"headline_{i}",
+                    height=80,
+                )
+                if headline.strip():
+                    headlines.append(headline)
 
         if st.button("📊 Compare Headlines", type="primary") and len(headlines) >= 2:
             # Log comparison
