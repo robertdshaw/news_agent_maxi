@@ -428,14 +428,14 @@ def main():
     st.markdown(
         """
     <div class="main-header">
-        <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 25px; margin-bottom: 0.5rem;">
             <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8IS0tIE9yYW5nZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iMTUiIHkxPSIxNSIgeDI9IjQ1IiB5Mj0iNDUiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMjAiIHkxPSIxMCIgeDI9IjUwIiB5Mj0iNDAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMTAiIHkxPSIyMCIgeDI9IjQwIiB5Mj0iNTAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8IS0tIFB1cnBsZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iNDUiIHkxPSIxNSIgeDI9IjE1IiB5Mj0iNDUiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNTAiIHkxPSIyMCIgeDI9IjIwIiB5Mj0iNTAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNDAiIHkxPSIxMCIgeDI9IjEwIiB5Mj0iNDAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+" 
-                 style="width: 50px; height: 50px;" alt="Logo">
-            <div>
-                <h1 style="margin: 0; color: white; font-size: 2.5rem;">AI Headline Optimizer</h1>
+                 style="width: 80px; height: 80px;" alt="Logo">
+            <div style="text-align: center;">
+                <h1 style="margin: 0; color: white; font-size: 3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em;">Headline Hunter</h1>
+                <div style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-top: 0.3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 400;">AI-powered headline optimization that drives engagement</div>
             </div>
         </div>
-        <p>Boost your headline performance with AI-powered optimization</p>
     </div>
     """,
         unsafe_allow_html=True,
