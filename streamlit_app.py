@@ -62,7 +62,9 @@ st.set_page_config(
 )
 
 # Add this to track page visits
-log_event("page_visit", {"user_agent": "streamlit_user"})
+# AFTER: Only logs when YOU set development mode
+if os.getenv("STREAMLIT_ENV") == "development":
+    log_event("page_visit", {"user_agent": "streamlit_user"})
 
 # Constants
 MODEL_DIR = Path("model_output")
@@ -506,7 +508,7 @@ def main():
         # Display logo using Streamlit's image function
         col_logo, col_title = st.columns([1, 4])
         with col_logo:
-            st.image(str(logo_path), width=80)
+            st.image(str(logo_path), width=100)
 
         with col_title:
             st.markdown(
@@ -543,9 +545,12 @@ def main():
 
     # Admin panel in sidebar
     st.sidebar.markdown("---")
-    if st.sidebar.text_input("📊 Analytics (Enter: admin)", type="password") == "admin":
-        logs = get_usage_stats()
-        st.sidebar.success("✅ Admin Mode Activated")
+    # AFTER: Two modes - development (easy access) and production (hidden)
+    if os.getenv("STREAMLIT_ENV") == "development":
+        # Easy access for you with checkbox
+        if st.sidebar.checkbox("Show Analytics"):
+            logs = get_usage_stats()
+            st.sidebar.success("✅ Admin Mode Activated")
 
         # Metrics
         st.sidebar.metric("Total Interactions", len(logs))
@@ -683,36 +688,21 @@ def main():
 
                         # Improvement summary
                         if improvement > 5:
-                            improvement_class = "improvement-positive"
-                            improvement_icon = "🎉"
-                            improvement_text = (
-                                f"Excellent! {improvement:+.1f}% CTR improvement"
+                            st.success(
+                                f"🎉 **Excellent!** {improvement:+.1f}% CTR improvement"
                             )
                         elif improvement > 0:
-                            improvement_class = "improvement-positive"
-                            improvement_icon = "📈"
-                            improvement_text = (
-                                f"Good improvement: {improvement:+.1f}% CTR boost"
+                            st.success(
+                                f"📈 **Good improvement:** {improvement:+.1f}% CTR boost"
                             )
                         elif improvement > -2:
-                            improvement_class = "improvement-neutral"
-                            improvement_icon = "📊"
-                            improvement_text = (
-                                "Minimal change - original was already well-optimized"
+                            st.info(
+                                f"📊 **Minimal change** - original was already well-optimized"
                             )
                         else:
-                            improvement_class = "improvement-negative"
-                            improvement_icon = "⚠️"
-                            improvement_text = f"Consider alternative approach: {improvement:.1f}% change"
-
-                        st.markdown(
-                            f"""
-                        <div class="{improvement_class}">
-                            <strong>{improvement_icon} {improvement_text}</strong>
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
-                        )
+                            st.warning(
+                                f"⚠️ **Consider alternative approach:** {improvement:.1f}% change"
+                            )
 
                         # Personalized tips - only show if there's meaningful room for improvement
                         if (
