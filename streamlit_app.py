@@ -21,13 +21,10 @@ from textstat import flesch_reading_ease
 import warnings
 import llm_rewriter
 from feature_utils import create_article_features_exact, load_preprocessing_components
+import datetime
+import io
 
 warnings.filterwarnings("ignore")
-
-import streamlit as st
-import datetime
-import json
-import os
 
 
 # Add this logging function at the top, after your imports
@@ -58,8 +55,8 @@ def get_usage_stats():
 
 # Page configuration
 st.set_page_config(
-    page_title="Article Engagement Predictor & Rewriter",
-    page_icon="📰",
+    page_title="AI Headline Optimizer",
+    page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -72,45 +69,96 @@ MODEL_DIR = Path("model_output")
 FAISS_DIR = Path("faiss_index")
 PREP_DIR = Path("data/preprocessed")
 
-# CSS Styles
+# Enhanced CSS Styles
 st.markdown(
     """
     <style>
-      .card {
-        background-color: white;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
+      .main-header {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+        margin-bottom: 2rem;
       }
-      .full-width { width: 100% !important; }
-      .guidelines-box {
-        background-color: #f0f2f6;
-        border: 2px solid #4f8bf9;
+      .metric-card {
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+        border-left: 4px solid #667eea;
+      }
+      .improvement-positive {
+        background-color: #d4edda;
+        border-left: 4px solid #28a745;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 0.5rem 0;
+      }
+      .improvement-negative {
+        background-color: #f8d7da;
+        border-left: 4px solid #dc3545;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 0.5rem 0;
+      }
+      .improvement-neutral {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 0.5rem 0;
+      }
+      .quick-tips {
+        background-color: #e7f3ff;
+        border: 2px solid #0066cc;
         border-radius: 10px;
         padding: 20px;
-        margin-top: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin: 20px 0;
       }
-      .guidelines-title {
+      .tips-title {
         font-weight: bold;
         font-size: 18px;
         margin-bottom: 15px;
-        color: #1f4e79;
-        text-align: center;
+        color: #0066cc;
       }
-      .guidelines-content {
-        font-size: 15px;
-        line-height: 1.6;
-        color: #2c3e50;
-      }
-      .guidelines-content ul {
-        margin: 10px 0;
-        padding-left: 20px;
-      }
-      .guidelines-content li {
+      .tip-item {
         margin: 8px 0;
-        color: #34495e;
+        color: #333;
+        padding-left: 20px;
+        position: relative;
+      }
+      .tip-item:before {
+        content: "💡";
+        position: absolute;
+        left: 0;
+      }
+      .batch-section {
+        background-color: #f8f9fa;
+        padding: 2rem;
+        border-radius: 10px;
+        margin: 2rem 0;
+        border: 1px solid #dee2e6;
+      }
+      .comparison-container {
+        display: flex;
+        gap: 20px;
+        margin: 20px 0;
+      }
+      .comparison-box {
+        flex: 1;
+        padding: 20px;
+        border-radius: 10px;
+        border: 2px solid #ddd;
+      }
+      .original-box {
+        background-color: #fff5f5;
+        border-color: #fed7d7;
+      }
+      .optimized-box {
+        background-color: #f0fff4;
+        border-color: #9ae6b4;
       }
     </style>
     """,
@@ -190,32 +238,6 @@ def load_model():
 
 
 @st.cache_resource
-def load_search_system():
-    """Load the enhanced FAISS search system with rewrite capabilities"""
-    try:
-        index = faiss.read_index(str(FAISS_DIR / "article_index.faiss"))
-
-        with open(FAISS_DIR / "article_lookup.pkl", "rb") as f:
-            article_lookup = pickle.load(f)
-
-        with open(FAISS_DIR / "article_id_mappings.pkl", "rb") as f:
-            mappings = pickle.load(f)
-
-        with open(FAISS_DIR / "index_metadata.json", "r") as f:
-            metadata = json.load(f)
-
-        return {
-            "index": index,
-            "article_lookup": article_lookup,
-            "mappings": mappings,
-            "metadata": metadata,
-        }
-    except Exception as e:
-        st.error(f"Error loading search system: {e}")
-        return None
-
-
-@st.cache_resource
 def load_llm_rewriter():
     """Load the efficient LLM headline rewriter with correct EDA insights path"""
     try:
@@ -248,18 +270,6 @@ def load_llm_rewriter():
 
             st.code(traceback.format_exc())
         return None
-
-
-@st.cache_resource
-def load_embedder():
-    """Load the sentence transformer model"""
-    try:
-        from feature_utils import get_embedder
-
-        return get_embedder()
-    except Exception as e:
-        st.error(f"Error loading embedder: {e}")
-        return SentenceTransformer("all-MiniLM-L6-v2")
 
 
 def predict_engagement(
@@ -311,18 +321,127 @@ def predict_engagement(
         return None
 
 
+def get_personalized_tips(features, result, improvement):
+    """Generate personalized optimization tips based on analysis"""
+    tips = []
+
+    # CTR-based tips
+    if improvement <= 0:
+        tips.append("Consider adding numbers or questions to increase curiosity")
+        tips.append("Try shortening to 8-12 words for optimal engagement")
+
+    # Feature-based tips
+    if not features.get("has_number", 0):
+        tips.append("Add specific numbers or statistics for credibility")
+
+    if not features.get("has_question", 0):
+        tips.append("Turn into a question to spark curiosity")
+
+    if features.get("title_length", 0) > 75:
+        tips.append("Shorten headline - aim for under 75 characters")
+
+    if features.get("title_word_count", 0) < 6:
+        tips.append("Add more context - headlines with 8-12 words perform better")
+    elif features.get("title_word_count", 0) > 15:
+        tips.append("Simplify language - long headlines lose engagement")
+
+    # Readability tips
+    if features.get("title_reading_ease", 50) < 50:
+        tips.append("Use simpler words to improve readability")
+
+    # Performance-based tips
+    if result["estimated_ctr"] < 0.03:
+        tips.append("Consider rewriting entirely - try emotional triggers or urgency")
+        tips.append("Use power words like 'exclusive', 'breaking', or 'revealed'")
+
+    return tips[:4]  # Return top 4 tips
+
+
+def process_batch_headlines(uploaded_file, llm_rewriter, model_pipeline, components):
+    """Process batch uploaded headlines"""
+    try:
+        # Read the CSV file
+        df = pd.read_csv(uploaded_file)
+
+        # Validate required columns
+        if "headline" not in df.columns:
+            st.error("CSV must contain a 'headline' column")
+            return None
+
+        # Add category column if not present
+        if "category" not in df.columns:
+            df["category"] = "news"
+
+        results = []
+        progress_bar = st.progress(0)
+
+        for idx, row in df.iterrows():
+            progress_bar.progress((idx + 1) / len(df))
+
+            headline = row["headline"]
+            category = row.get("category", "news")
+
+            # Get original prediction
+            original_result = predict_engagement(
+                headline, "", category, model_pipeline, components
+            )
+
+            # Get optimized headline
+            article_data = {"category": category, "abstract": ""}
+            rewrite_result = llm_rewriter.get_best_headline(headline, article_data)
+
+            optimized_headline = rewrite_result.get("best_headline", headline)
+            optimized_result = predict_engagement(
+                optimized_headline, "", category, model_pipeline, components
+            )
+
+            # Calculate improvement
+            original_ctr = original_result["estimated_ctr"] if original_result else 0
+            optimized_ctr = optimized_result["estimated_ctr"] if optimized_result else 0
+            improvement = (
+                ((optimized_ctr - original_ctr) / original_ctr * 100)
+                if original_ctr > 0
+                else 0
+            )
+
+            results.append(
+                {
+                    "original_headline": headline,
+                    "optimized_headline": optimized_headline,
+                    "original_ctr": f"{original_ctr*100:.2f}%",
+                    "optimized_ctr": f"{optimized_ctr*100:.2f}%",
+                    "improvement": f"{improvement:+.1f}%",
+                    "category": category,
+                }
+            )
+
+        progress_bar.empty()
+        return pd.DataFrame(results)
+
+    except Exception as e:
+        st.error(f"Error processing batch file: {e}")
+        return None
+
+
 def main():
-    st.title("📰 AI-Assisted Headline Hunter")
-    st.write("**Predict engagement and optimize headlines with AI-powered rewriting**")
+    # Header
+    st.markdown(
+        """
+    <div class="main-header">
+        <h1>🚀 AI Headline Optimizer</h1>
+        <p>Boost your headline performance with AI-powered optimization</p>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
 
     # Load all systems once at startup
     with st.spinner("Loading AI systems..."):
         model_pipeline = load_model()
         preprocessing_components = load_preprocessing_components()
-        search_system = load_search_system()
         llm_rewriter = load_llm_rewriter()
 
-    # ENHANCED ADMIN PANEL WITH DOWNLOAD BUTTON
+    # Admin panel in sidebar
     st.sidebar.markdown("---")
     if st.sidebar.text_input("📊 Analytics (Enter: admin)", type="password") == "admin":
         logs = get_usage_stats()
@@ -331,50 +450,39 @@ def main():
         # Metrics
         st.sidebar.metric("Total Interactions", len(logs))
         st.sidebar.metric(
-            "CTR Predictions",
-            len([l for l in logs if l["event"] == "ctr_prediction"]),
-        )
-        st.sidebar.metric(
-            "Headlines Rewritten",
+            "Headlines Optimized",
             len([l for l in logs if l["event"] == "headline_rewrite"]),
-        )
-        st.sidebar.metric(
-            "Searches Made", len([l for l in logs if l["event"] == "search"])
         )
 
         # Download button
         if logs:
             log_data = "\n".join([json.dumps(log) for log in logs])
             st.sidebar.download_button(
-                label="📥 Download Analytics Data",
+                label="📥 Download Analytics",
                 data=log_data,
-                file_name=f"headline_hunter_analytics_{datetime.date.today()}.txt",
+                file_name=f"analytics_{datetime.date.today()}.txt",
                 mime="text/plain",
             )
 
-            # Show recent activity
-            st.sidebar.write("**📈 Recent Activity:**")
-            for log in logs[-5:]:  # Last 5 events
-                st.sidebar.caption(f"• {log['event']} - {log['timestamp'][11:16]}")
-        else:
-            st.sidebar.info("No analytics data yet")
-
-    # Main tabs
-    (tab1,) = st.tabs(
-        ["🔮 Predict & Rewrite"]  # "🔍 Search Articles", "📊 Headline Rewrite Analysis"
+    # Mode selector
+    mode = st.radio(
+        "Choose optimization mode:",
+        ["🎯 Single Headline", "📊 Batch Upload", "⚖️ Comparison Mode"],
+        horizontal=True,
     )
 
-    # Tab 1: Predict & Rewrite
-    with tab1:
-        # Main layout with input on left and guidelines on right
+    if mode == "🎯 Single Headline":
+        # Single headline optimization
         col1, col2 = st.columns([2, 1])
 
         with col1:
+            st.subheader("Optimize Your Headline")
+
             title = st.text_area(
-                "Article Title",
-                placeholder="Enter your article headline here...",
+                "Enter your headline:",
+                placeholder="Local Team Wins Championship Game",
                 height=100,
-                help="Enter the headline you want to test and optimize",
+                help="Enter the headline you want to optimize",
             )
 
             categories = [
@@ -398,435 +506,1148 @@ def main():
                 "unknown",
             ]
 
-            category = st.selectbox("Article Category", categories, index=0)
-
-            predict_and_rewrite = st.button("🤖 Analyze & Optimize", type="primary")
+            category = st.selectbox("Category:", categories, index=0)
+            optimize_btn = st.button("🚀 Optimize Headline", type="primary")
 
         with col2:
-            # Editorial Guidelines in right column
             st.markdown(
                 """
-            <div class="guidelines-box">
-                <div class="guidelines-title">💡 Editorial Guidelines</div>
-                <div class="guidelines-content">
-                    <strong>High-engagement headlines:</strong>
-                    <ul>
-                        <li>8-12 words optimal</li>
-                        <li>Include numbers/questions</li>
-                        <li>High readability (60+ score)</li>
-                        <li>Front-load key information</li>
-                        <li>Under 75 characters</li>
-                    </ul>
-                </div>
+            <div class="quick-tips">
+                <div class="tips-title">💡 Quick Tips</div>
+                <div class="tip-item">Use 8-12 words for best results</div>
+                <div class="tip-item">Include numbers when relevant</div>
+                <div class="tip-item">Ask questions to spark curiosity</div>
+                <div class="tip-item">Keep under 75 characters</div>
+                <div class="tip-item">Front-load key information</div>
             </div>
             """,
                 unsafe_allow_html=True,
             )
 
-        # Process prediction and rewriting - FIXED VERSION
-        if predict_and_rewrite:
-            if title.strip():
-                # Log the event with actual data
+        if optimize_btn and title.strip():
+            if model_pipeline and preprocessing_components and llm_rewriter:
+                # Log the event
                 log_event(
-                    "ctr_prediction",
-                    {
-                        "headline": title,
-                        "category": category,
-                        "headline_length": len(title),
-                        "word_count": len(title.split()),
-                    },
+                    "headline_optimization",
+                    {"headline": title, "category": category, "mode": "single"},
                 )
 
-                if model_pipeline and preprocessing_components:
-                    # Step 1: Predict engagement
-                    with st.spinner("🔮 Analyzing engagement potential..."):
-                        result = predict_engagement(
-                            title,
-                            "",
-                            category,
-                            model_pipeline,
-                            preprocessing_components,
+                with st.spinner("🤖 Optimizing your headline..."):
+                    # Get original prediction
+                    original_result = predict_engagement(
+                        title, "", category, model_pipeline, preprocessing_components
+                    )
+
+                    # Get optimized headline
+                    article_data = {"category": category, "abstract": ""}
+                    rewrite_result = llm_rewriter.get_best_headline(title, article_data)
+
+                    optimized_headline = rewrite_result.get("best_headline", title)
+                    optimized_result = predict_engagement(
+                        optimized_headline,
+                        "",
+                        category,
+                        model_pipeline,
+                        preprocessing_components,
+                    )
+
+                    if original_result and optimized_result:
+                        # Calculate improvement
+                        original_ctr = original_result["estimated_ctr"]
+                        optimized_ctr = optimized_result["estimated_ctr"]
+                        improvement = (
+                            ((optimized_ctr - original_ctr) / original_ctr * 100)
+                            if original_ctr > 0
+                            else 0
                         )
 
-                    if result and isinstance(result, dict):
-                        # Get threshold from model pipeline
-                        threshold = model_pipeline["baseline_metrics"].get(
-                            "ctr_threshold", 0.05
-                        )
+                        # Display results in comparison format
+                        st.markdown("### 📊 Optimization Results")
 
-                        # Display prediction results
-                        st.subheader("📊 Engagement Analysis")
+                        col_orig, col_opt = st.columns(2)
 
-                        col_pred1, col_pred2, col_pred3 = st.columns(3)
-
-                        with col_pred1:
-                            # Show engagement level with threshold
-                            engagement_level = (
-                                "High Engagement"
-                                if result["high_engagement"]
-                                else "Low Engagement"
+                        with col_orig:
+                            st.markdown(
+                                """
+                            <div class="comparison-box original-box">
+                                <h4>📝 Original Headline</h4>
+                            </div>
+                            """,
+                                unsafe_allow_html=True,
                             )
-                            engagement_emoji = (
-                                "🔥" if result["high_engagement"] else "📉"
+                            st.info(title)
+                            st.metric("Estimated CTR", f"{original_ctr*100:.2f}%")
+
+                        with col_opt:
+                            st.markdown(
+                                """
+                            <div class="comparison-box optimized-box">
+                                <h4>✨ Optimized Headline</h4>
+                            </div>
+                            """,
+                                unsafe_allow_html=True,
                             )
+                            st.success(optimized_headline)
                             st.metric(
-                                "Engagement Level",
-                                f"{engagement_emoji} {engagement_level}",
+                                "Estimated CTR",
+                                f"{optimized_ctr*100:.2f}%",
+                                f"{improvement:+.1f}%",
                             )
 
-                        with col_pred2:
-                            # Show CTR as percentage with threshold
-                            ctr_percentage = result["estimated_ctr"] * 100
-                            st.metric("Estimated CTR", f"{ctr_percentage:.2f}%")
-                            st.caption(f"Threshold: {threshold*100:.1f}%")
-
-                        # Step 2: Generate AI rewrites
-                        st.subheader("✨ AI-Optimized Headlines")
-
-                        if llm_rewriter:
-                            with st.spinner("🤖 Generating AI-optimized headlines..."):
-                                try:
-                                    article_data = {
-                                        "category": category,
-                                        "abstract": "",
-                                        "current_ctr": result["estimated_ctr"],
-                                    }
-
-                                    rewrite_result = llm_rewriter.get_best_headline(
-                                        title, article_data
-                                    )
-
-                                    if (
-                                        rewrite_result
-                                        and "best_headline" in rewrite_result
-                                    ):
-                                        best_headline = rewrite_result["best_headline"]
-
-                                        # Log the rewrite event
-                                        log_event(
-                                            "headline_rewrite",
-                                            {
-                                                "original": title,
-                                                "rewritten": best_headline,
-                                                "category": category,
-                                            },
-                                        )
-
-                                        if best_headline.strip() != title.strip():
-                                            # Predict engagement for the rewritten headline
-                                            rewritten_result = predict_engagement(
-                                                best_headline,
-                                                "",
-                                                category,
-                                                model_pipeline,
-                                                preprocessing_components,
-                                            )
-
-                                            # Display comparison
-                                            col_orig, col_rewrite = st.columns(2)
-
-                                            with col_orig:
-                                                st.markdown("**Original Headline:**")
-                                                st.info(f"📝 {title}")
-                                                st.write(
-                                                    f"CTR: {result['estimated_ctr']*100:.2f}%"
-                                                )
-
-                                            with col_rewrite:
-                                                st.markdown(
-                                                    "**AI-Optimized Headline:**"
-                                                )
-                                                st.success(f"✨ {best_headline}")
-
-                                                if rewritten_result:
-                                                    st.write(
-                                                        f"CTR: {rewritten_result['estimated_ctr']*100:.2f}%"
-                                                    )
-
-                                                    # Show improvement
-                                                    ctr_improvement = (
-                                                        rewritten_result[
-                                                            "estimated_ctr"
-                                                        ]
-                                                        - result["estimated_ctr"]
-                                                    ) * 100
-                                                    if ctr_improvement > 0:
-                                                        st.success(
-                                                            f"📈 CTR Improvement: +{ctr_improvement:.2f}%"
-                                                        )
-                                                    elif ctr_improvement < 0:
-                                                        st.warning(
-                                                            f"📉 CTR Change: {ctr_improvement:.2f}%"
-                                                        )
-                                                    else:
-                                                        st.info(
-                                                            "📊 No significant change"
-                                                        )
-
-                                            # Show all candidates
-                                            if "all_candidates" in rewrite_result:
-                                                with st.expander(
-                                                    "🔍 View All AI-Generated Candidates"
-                                                ):
-                                                    for i, (
-                                                        candidate,
-                                                        ctr,
-                                                    ) in enumerate(
-                                                        rewrite_result[
-                                                            "all_candidates"
-                                                        ],
-                                                        1,
-                                                    ):
-                                                        st.write(
-                                                            f"{i}. **{candidate}** (CTR: {ctr*100:.2f}%)"
-                                                        )
-                                        else:
-                                            st.info(
-                                                "🎯 Original headline is already well-optimized!"
-                                            )
-
-                                            # Show the analysis anyway
-                                            if "all_candidates" in rewrite_result:
-                                                with st.expander(
-                                                    "🔍 View Alternative Suggestions"
-                                                ):
-                                                    for i, (
-                                                        candidate,
-                                                        ctr,
-                                                    ) in enumerate(
-                                                        rewrite_result[
-                                                            "all_candidates"
-                                                        ],
-                                                        1,
-                                                    ):
-                                                        if candidate != title:
-                                                            st.write(
-                                                                f"{i}. **{candidate}** (CTR: {ctr*100:.2f}%)"
-                                                            )
-                                    else:
-                                        st.warning(
-                                            "🤔 No rewrite suggestions generated"
-                                        )
-
-                                except Exception as e:
-                                    st.error(f"❌ Rewriting failed: {e}")
-
-                                    # Show the exact error for debugging
-                                    with st.expander("🔍 Debug Info"):
-                                        import traceback
-
-                                        st.code(traceback.format_exc())
+                        # Improvement summary
+                        if improvement > 5:
+                            improvement_class = "improvement-positive"
+                            improvement_icon = "🎉"
+                            improvement_text = (
+                                f"Excellent! {improvement:+.1f}% CTR improvement"
+                            )
+                        elif improvement > 0:
+                            improvement_class = "improvement-positive"
+                            improvement_icon = "📈"
+                            improvement_text = (
+                                f"Good improvement: {improvement:+.1f}% CTR boost"
+                            )
+                        elif improvement > -2:
+                            improvement_class = "improvement-neutral"
+                            improvement_icon = "📊"
+                            improvement_text = (
+                                "Minimal change - original was already well-optimized"
+                            )
                         else:
-                            st.error(
-                                "❌ AI Rewriter not available. Please check your OpenAI API key."
-                            )
+                            improvement_class = "improvement-negative"
+                            improvement_icon = "⚠️"
+                            improvement_text = f"Consider alternative approach: {improvement:.1f}% change"
 
+                        st.markdown(
+                            f"""
+                        <div class="{improvement_class}">
+                            <strong>{improvement_icon} {improvement_text}</strong>
+                        </div>
+                        """,
+                            unsafe_allow_html=True,
+                        )
+
+                        # Personalized tips
+                        tips = get_personalized_tips(
+                            original_result["features"], original_result, improvement
+                        )
+                        if tips:
+                            st.markdown("### 💡 Personalized Tips for Better Headlines")
+                            for tip in tips:
+                                st.markdown(f"• {tip}")
+
+    elif mode == "📊 Batch Upload":
+        # Batch upload section
+        st.markdown(
+            """
+        <div class="batch-section">
+            <h3>📊 Batch Headline Optimization</h3>
+            <p>Upload a CSV file with headlines to optimize multiple headlines at once</p>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        # File upload
+        uploaded_file = st.file_uploader(
+            "Upload CSV file",
+            type=["csv"],
+            help="CSV should contain a 'headline' column. Optional 'category' column.",
+        )
+
+        # Download sample template
+        sample_df = pd.DataFrame(
+            {
+                "headline": [
+                    "Local Team Wins Game",
+                    "Stock Market Changes Today",
+                    "New Health Study Released",
+                ],
+                "category": ["sports", "finance", "health"],
+            }
+        )
+
+        csv_sample = sample_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Sample CSV Template",
+            data=csv_sample,
+            file_name="headline_template.csv",
+            mime="text/csv",
+        )
+
+        if uploaded_file and llm_rewriter:
+            if st.button("🚀 Optimize All Headlines", type="primary"):
+                # Log batch optimization
+                log_event("batch_optimization", {"filename": uploaded_file.name})
+
+                # Process batch
+                results_df = process_batch_headlines(
+                    uploaded_file,
+                    llm_rewriter,
+                    model_pipeline,
+                    preprocessing_components,
+                )
+
+                if results_df is not None:
+                    st.success(f"✅ Optimized {len(results_df)} headlines!")
+
+                    # Show summary metrics
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        improved_count = sum(
+                            1
+                            for imp in results_df["improvement"]
+                            if float(imp.replace("%", "").replace("+", "")) > 0
+                        )
+                        st.metric(
+                            "Headlines Improved", f"{improved_count}/{len(results_df)}"
+                        )
+
+                    with col2:
+                        avg_improvement = np.mean(
+                            [
+                                float(imp.replace("%", "").replace("+", ""))
+                                for imp in results_df["improvement"]
+                            ]
+                        )
+                        st.metric("Average Improvement", f"{avg_improvement:+.1f}%")
+
+                    with col3:
+                        best_improvement = max(
+                            [
+                                float(imp.replace("%", "").replace("+", ""))
+                                for imp in results_df["improvement"]
+                            ]
+                        )
+                        st.metric("Best Improvement", f"{best_improvement:+.1f}%")
+
+                    # Display results
+                    st.subheader("📋 Optimization Results")
+                    st.dataframe(results_df, use_container_width=True)
+
+                    # Download results
+                    csv_results = results_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Optimized Headlines",
+                        data=csv_results,
+                        file_name=f"optimized_headlines_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                    )
+
+    elif mode == "⚖️ Comparison Mode":
+        # Comparison mode
+        st.subheader("⚖️ Compare Headlines Side-by-Side")
+        st.write("Test multiple headline variations against each other")
+
+        # Input multiple headlines
+        num_headlines = st.slider("Number of headlines to compare:", 2, 5, 3)
+
+        headlines = []
+        category = st.selectbox(
+            "Category for all headlines:",
+            ["news", "sports", "finance", "travel", "lifestyle", "health"],
+        )
+
+        for i in range(num_headlines):
+            headline = st.text_input(
+                f"Headline {i+1}:",
+                placeholder=f"Enter headline {i+1}...",
+                key=f"headline_{i}",
+            )
+            if headline.strip():
+                headlines.append(headline)
+
+        if st.button("📊 Compare Headlines", type="primary") and len(headlines) >= 2:
+            # Log comparison
+            log_event(
+                "headline_comparison",
+                {"headlines_count": len(headlines), "category": category},
+            )
+
+            with st.spinner("Analyzing headlines..."):
+                comparison_results = []
+
+                for i, headline in enumerate(headlines):
+                    result = predict_engagement(
+                        headline, "", category, model_pipeline, preprocessing_components
+                    )
+
+                    if result:
+                        comparison_results.append(
+                            {
+                                "Headline": headline,
+                                "CTR": f"{result['estimated_ctr']*100:.2f}%",
+                                "Engagement": (
+                                    "🔥 High" if result["high_engagement"] else "📉 Low"
+                                ),
+                                "Score": result["estimated_ctr"],
+                            }
+                        )
+
+                # Sort by CTR score
+                comparison_results.sort(key=lambda x: x["Score"], reverse=True)
+
+                # Display results
+                st.subheader("🏆 Comparison Results")
+
+                for i, result in enumerate(comparison_results):
+                    if i == 0:
+                        st.success(
+                            f"🥇 **Winner:** {result['Headline']} - {result['CTR']}"
+                        )
+                    elif i == 1:
+                        st.info(
+                            f"🥈 **Runner-up:** {result['Headline']} - {result['CTR']}"
+                        )
                     else:
-                        st.error("❌ Prediction failed. Please check your inputs.")
-                else:
-                    st.error("❌ Model or preprocessing components not loaded.")
-            else:
-                st.warning("⚠️ Please enter an article title.")
+                        st.write(f"{i+1}. {result['Headline']} - {result['CTR']}")
 
-    # # Tab 2: Search Articles
-    # with tab2:
-    #     st.header("Search Articles")
-
-    #     search_query = st.text_input(
-    #         "Search Query",
-    #         placeholder="Enter keywords or describe the topic...",
-    #         help="Search through articles by keywords, title, or content.",
-    #     )
-
-    #     col_search1, col_search2 = st.columns(2)
-    #     with col_search1:
-    #         num_results = st.slider("Number of results", 5, 20, 10)
-
-    #     if st.button("🔍 Search", type="primary"):
-    #         if search_query.strip() and search_system:
-    #             # Log the search event
-    #             log_event(
-    #                 "search",
-    #                 {"query": search_query, "num_results_requested": num_results},
-    #             )
-
-    #             with st.spinner("Searching articles..."):
-    #                 try:
-    #                     embedder = load_embedder()
-    #                     query_embedding = embedder.encode([search_query])
-    #                     query_embedding = query_embedding.astype(np.float32)
-    #                     faiss.normalize_L2(query_embedding)
-
-    #                     search_k = num_results * 3
-    #                     distances, indices = search_system["index"].search(
-    #                         query_embedding, search_k
-    #                     )
-
-    #                     results = []
-    #                     for dist, idx in zip(distances[0], indices[0]):
-    #                         if idx in search_system["mappings"]["idx_to_article_id"]:
-    #                             article_id = search_system["mappings"][
-    #                                 "idx_to_article_id"
-    #                             ][idx]
-    #                             if article_id in search_system["article_lookup"]:
-    #                                 article_info = search_system["article_lookup"][
-    #                                     article_id
-    #                                 ].copy()
-    #                                 l2_distance = float(dist)
-    #                                 similarity_score = 1.0 / (1.0 + l2_distance)
-    #                                 article_info["similarity_score"] = similarity_score
-    #                                 results.append(article_info)
-
-    #                                 if len(results) >= num_results:
-    #                                     break
-
-    #                     if results:
-    #                         st.subheader(f"📰 Found {len(results)} articles")
-    #                         for i, article in enumerate(results, 1):
-    #                             with st.expander(f"{i}. {article['title'][:70]}..."):
-    #                                 col_art1, col_art2 = st.columns([3, 1])
-
-    #                                 with col_art1:
-    #                                     st.write(f"**Title:** {article['title']}")
-    #                                     if article.get("abstract"):
-    #                                         abstract_preview = (
-    #                                             article["abstract"][:200] + "..."
-    #                                             if len(article["abstract"]) > 200
-    #                                             else article["abstract"]
-    #                                         )
-    #                                         st.write(
-    #                                             f"**Abstract:** {abstract_preview}"
-    #                                         )
-
-    #                                 with col_art2:
-    #                                     st.metric(
-    #                                         "Similarity",
-    #                                         f"{article['similarity_score']:.3f}",
-    #                                     )
-    #                                     st.write(f"**Category:** {article['category']}")
-
-    #                                     if not pd.isna(article.get("ctr")):
-    #                                         st.write(
-    #                                             f"**CTR:** {article['ctr']*100:.2f}%"
-    #                                         )
-
-    #                                     if not pd.isna(article.get("high_engagement")):
-    #                                         engagement_status = (
-    #                                             "🔥 High"
-    #                                             if article["high_engagement"]
-    #                                             else "📉 Low"
-    #                                         )
-    #                                         st.write(
-    #                                             f"**Engagement:** {engagement_status}"
-    #                                         )
-    #                     else:
-    #                         st.info("No articles found. Try different keywords.")
-    #                 except Exception as e:
-    #                     st.error(f"Search failed: {e}")
-    #         else:
-    #             if not search_query.strip():
-    #                 st.warning("Please enter a search query.")
-    #             else:
-    #                 st.error("Search system not available.")
-
-    # # Tab 3: Rewrite Analysis
-    # with tab3:
-    #     st.header("Headline Rewrite Analysis")
-
-    #     if search_system and search_system["metadata"].get("rewrite_analysis"):
-    #         rewrite_stats = search_system["metadata"]["rewrite_analysis"]
-
-    #         # Load detailed rewrite results if available
-    #         rewrite_file = FAISS_DIR / "rewrite_analysis" / "headline_rewrites.parquet"
-    #         if rewrite_file.exists():
-    #             try:
-    #                 rewrite_df = pd.read_parquet(rewrite_file)
-
-    #                 st.subheader("📈 Strategy Performance")
-
-    #                 # Strategy comparison
-    #                 if "model_ctr_improvement" in rewrite_df.columns:
-    #                     strategy_performance = (
-    #                         rewrite_df.groupby("strategy")
-    #                         .agg(
-    #                             {
-    #                                 "quality_score": "mean",
-    #                                 "readability_improvement": "mean",
-    #                                 "model_ctr_improvement": "mean",
-    #                             }
-    #                         )
-    #                         .round(4)
-    #                     )
-
-    #                     fig = px.bar(
-    #                         strategy_performance.reset_index(),
-    #                         x="strategy",
-    #                         y="model_ctr_improvement",
-    #                         title="Average Model-Based CTR Improvement by Strategy",
-    #                     )
-    #                     st.plotly_chart(fig, use_container_width=True)
-    #                 else:
-    #                     strategy_performance = (
-    #                         rewrite_df.groupby("strategy")
-    #                         .agg(
-    #                             {
-    #                                 "quality_score": "mean",
-    #                                 "readability_improvement": "mean",
-    #                                 "predicted_ctr_improvement": "mean",
-    #                             }
-    #                         )
-    #                         .round(3)
-    #                     )
-
-    #                     fig = px.bar(
-    #                         strategy_performance.reset_index(),
-    #                         x="strategy",
-    #                         y="quality_score",
-    #                         title="Average Quality Score by Strategy",
-    #                     )
-    #                     st.plotly_chart(fig, use_container_width=True)
-
-    #                 # Show detailed results
-    #                 st.subheader("🔍 Detailed Results")
-
-    #                 display_columns = [
-    #                     "original_title",
-    #                     "strategy",
-    #                     "rewritten_title",
-    #                     "quality_score",
-    #                     "readability_improvement",
-    #                     "predicted_ctr_improvement",
-    #                 ]
-
-    #                 if "model_ctr_improvement" in rewrite_df.columns:
-    #                     display_columns.extend(
-    #                         ["model_ctr_improvement", "original_ctr", "rewritten_ctr"]
-    #                     )
-
-    #                 available_columns = [
-    #                     col for col in display_columns if col in rewrite_df.columns
-    #                 ]
-    #                 st.dataframe(
-    #                     rewrite_df[available_columns].head(20), use_container_width=True
-    #                 )
-
-    #             except Exception as e:
-    #                 st.error(f"Error loading rewrite analysis: {e}")
-    #         else:
-    #             st.info(
-    #                 "Detailed rewrite analysis not available. Run the FAISS index creation script to generate analysis."
-    #             )
-    #     else:
-    #         st.info(
-    #             "No rewrite analysis available. The system may be running in offline mode."
-    #         )
+                # Detailed comparison table
+                comparison_df = pd.DataFrame(comparison_results)[
+                    ["Headline", "CTR", "Engagement"]
+                ]
+                st.dataframe(comparison_df, use_container_width=True)
 
     # Footer
     st.markdown("---")
     st.markdown(
-        "**Article Engagement Predictor & AI Rewriter** | Built with Streamlit, XGBoost, and OpenAI"
+        "**AI Headline Optimizer** | Built with Streamlit, XGBoost, and OpenAI | "
+        "Boost your content engagement with data-driven headline optimization"
     )
 
 
 if __name__ == "__main__":
     main()
+
+# import os
+# import torch
+
+# # Fix for Streamlit's local_sources_watcher crashing on torch.classes
+# try:
+#     torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__)]
+# except Exception:
+#     pass
+
+# import streamlit as st
+# import json
+# import pandas as pd
+# import numpy as np
+# import pickle
+# import faiss
+# from pathlib import Path
+# from sentence_transformers import SentenceTransformer
+# import plotly.express as px
+# import plotly.graph_objects as go
+# from textstat import flesch_reading_ease
+# import warnings
+# import llm_rewriter
+# from feature_utils import create_article_features_exact, load_preprocessing_components
+
+# warnings.filterwarnings("ignore")
+
+# import streamlit as st
+# import datetime
+# import json
+# import os
+
+
+# # Add this logging function at the top, after your imports
+# def log_event(event_type, data):
+#     """Log events to track user behavior"""
+#     log_entry = {
+#         "timestamp": datetime.datetime.now().isoformat(),
+#         "event": event_type,
+#         "data": data,
+#     }
+
+#     try:
+#         with open("usage_log.txt", "a") as f:
+#             f.write(json.dumps(log_entry) + "\n")
+#     except:
+#         pass  # Fail silently if can't write
+
+
+# def get_usage_stats():
+#     """Read usage statistics"""
+#     try:
+#         with open("usage_log.txt", "r") as f:
+#             logs = [json.loads(line) for line in f]
+#         return logs
+#     except:
+#         return []
+
+
+# # Page configuration
+# st.set_page_config(
+#     page_title="Article Engagement Predictor & Rewriter",
+#     page_icon="📰",
+#     layout="wide",
+#     initial_sidebar_state="expanded",
+# )
+
+# # Add this to track page visits
+# log_event("page_visit", {"user_agent": "streamlit_user"})
+
+# # Constants
+# MODEL_DIR = Path("model_output")
+# FAISS_DIR = Path("faiss_index")
+# PREP_DIR = Path("data/preprocessed")
+
+# # CSS Styles
+# st.markdown(
+#     """
+#     <style>
+#       .card {
+#         background-color: white;
+#         padding: 1rem;
+#         border-radius: 0.5rem;
+#         box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+#         margin-bottom: 1rem;
+#       }
+#       .full-width { width: 100% !important; }
+#       .guidelines-box {
+#         background-color: #f0f2f6;
+#         border: 2px solid #4f8bf9;
+#         border-radius: 10px;
+#         padding: 20px;
+#         margin-top: 20px;
+#         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+#       }
+#       .guidelines-title {
+#         font-weight: bold;
+#         font-size: 18px;
+#         margin-bottom: 15px;
+#         color: #1f4e79;
+#         text-align: center;
+#       }
+#       .guidelines-content {
+#         font-size: 15px;
+#         line-height: 1.6;
+#         color: #2c3e50;
+#       }
+#       .guidelines-content ul {
+#         margin: 10px 0;
+#         padding-left: 20px;
+#       }
+#       .guidelines-content li {
+#         margin: 8px 0;
+#         color: #34495e;
+#       }
+#     </style>
+#     """,
+#     unsafe_allow_html=True,
+# )
+
+
+# @st.cache_resource
+# def load_model():
+#     """Load the trained engagement prediction model"""
+#     try:
+#         model_files = list(MODEL_DIR.glob("*_optimized_model.pkl"))
+#         model_file = (
+#             model_files[0] if model_files else MODEL_DIR / "xgboost_optimized_model.pkl"
+#         )
+
+#         with open(model_file, "rb") as f:
+#             model = pickle.load(f)
+
+#         metadata_file = MODEL_DIR / "model_metadata.json"
+#         metadata = {}
+#         if metadata_file.exists():
+#             with open(metadata_file, "r") as f:
+#                 metadata = json.load(f)
+
+#         # Load baseline metrics from your actual EDA insights
+#         baseline_metrics = {}
+#         try:
+#             # Try the preprocessed data directory first
+#             eda_path = "data/preprocessed/processed_data/headline_eda_insights.json"
+#             if not Path(eda_path).exists():
+#                 eda_path = "headline_eda_insights.json"
+
+#             with open(eda_path, "r") as f:
+#                 eda_insights = json.load(f)
+#                 baseline_metrics = eda_insights.get(
+#                     "baseline_metrics",
+#                     {
+#                         "overall_avg_ctr": 0.041238101089957464,
+#                         "training_median_ctr": 0.019230769230769232,
+#                         "ctr_threshold": 0.05,
+#                     },
+#                 )
+#         except:
+#             # Fallback to metadata values
+#             baseline_metrics = {
+#                 "overall_avg_ctr": metadata.get("target_statistics", {}).get(
+#                     "mean_ctr", 0.041
+#                 ),
+#                 "training_median_ctr": metadata.get("target_statistics", {}).get(
+#                     "median_ctr", 0.019
+#                 ),
+#                 "ctr_threshold": metadata.get("target_statistics", {}).get(
+#                     "ctr_threshold", 0.05
+#                 ),
+#             }
+
+#         model_pipeline = {
+#             "model": model,
+#             "model_name": metadata.get("model_type", "XGBoost"),
+#             "target": "high_engagement",
+#             "performance": metadata.get("final_evaluation", {}),
+#             "feature_names": (
+#                 list(model.feature_names_in_)
+#                 if hasattr(model, "feature_names_in_")
+#                 else []
+#             ),
+#             "scaler": None,
+#             "baseline_metrics": baseline_metrics,
+#             "metadata": metadata,
+#         }
+
+#         return model_pipeline
+#     except Exception as e:
+#         st.error(f"Error loading model: {e}")
+#         return None
+
+
+# @st.cache_resource
+# def load_search_system():
+#     """Load the enhanced FAISS search system with rewrite capabilities"""
+#     try:
+#         index = faiss.read_index(str(FAISS_DIR / "article_index.faiss"))
+
+#         with open(FAISS_DIR / "article_lookup.pkl", "rb") as f:
+#             article_lookup = pickle.load(f)
+
+#         with open(FAISS_DIR / "article_id_mappings.pkl", "rb") as f:
+#             mappings = pickle.load(f)
+
+#         with open(FAISS_DIR / "index_metadata.json", "r") as f:
+#             metadata = json.load(f)
+
+#         return {
+#             "index": index,
+#             "article_lookup": article_lookup,
+#             "mappings": mappings,
+#             "metadata": metadata,
+#         }
+#     except Exception as e:
+#         st.error(f"Error loading search system: {e}")
+#         return None
+
+
+# @st.cache_resource
+# def load_llm_rewriter():
+#     """Load the efficient LLM headline rewriter with correct EDA insights path"""
+#     try:
+#         model_pipeline = load_model()
+#         components = load_preprocessing_components()
+
+#         if model_pipeline and components:
+#             # Try the preprocessed data directory first
+#             eda_insights_path = (
+#                 "data/preprocessed/processed_data/headline_eda_insights.json"
+#             )
+#             if not Path(eda_insights_path).exists():
+#                 # Fall back to project root
+#                 eda_insights_path = "headline_eda_insights.json"
+
+#             return llm_rewriter.EnhancedLLMHeadlineRewriter(
+#                 model_pipeline=model_pipeline,
+#                 components=components,
+#                 eda_insights_path=eda_insights_path,
+#             )
+#         else:
+#             st.warning("Could not load model pipeline or components for rewriter")
+#             return None
+
+#     except Exception as e:
+#         st.error(f"Error loading LLM rewriter: {e}")
+#         # Show the actual error for debugging
+#         with st.expander("🔍 Debug Info"):
+#             import traceback
+
+#             st.code(traceback.format_exc())
+#         return None
+
+
+# @st.cache_resource
+# def load_embedder():
+#     """Load the sentence transformer model"""
+#     try:
+#         from feature_utils import get_embedder
+
+#         return get_embedder()
+#     except Exception as e:
+#         st.error(f"Error loading embedder: {e}")
+#         return SentenceTransformer("all-MiniLM-L6-v2")
+
+
+# def predict_engagement(
+#     title, abstract="", category="news", model_pipeline=None, components=None
+# ):
+#     """Predict engagement for a single article using exact feature replication"""
+#     if model_pipeline is None or components is None:
+#         return None
+
+#     try:
+#         # Create features using exact replication of preprocessing pipeline
+#         features = create_article_features_exact(title, abstract, category, components)
+
+#         # Create feature vector in the exact order expected by the model
+#         feature_order = components.get("feature_order", [])
+
+#         if feature_order:
+#             feature_vector = [
+#                 features.get(feat_name, 0.0) for feat_name in feature_order
+#             ]
+#         elif hasattr(model_pipeline["model"], "feature_names_in_"):
+#             expected_features = list(model_pipeline["model"].feature_names_in_)
+#             feature_vector = [
+#                 features.get(feat_name, 0.0) for feat_name in expected_features
+#             ]
+#         else:
+#             feature_vector = [features[k] for k in sorted(features.keys())]
+
+#         feature_vector = np.array(feature_vector).reshape(1, -1)
+
+#         # Predict
+#         prediction = model_pipeline["model"].predict(feature_vector)[0]
+#         prediction_proba = model_pipeline["model"].predict_proba(feature_vector)[0]
+
+#         # Convert engagement probability to estimated CTR
+#         engagement_prob = float(prediction_proba[1])
+#         estimated_ctr = max(0.01, engagement_prob * 0.1)
+
+#         return {
+#             "high_engagement": bool(prediction),
+#             "engagement_probability": engagement_prob,
+#             "estimated_ctr": estimated_ctr,
+#             "confidence": float(max(prediction_proba)),
+#             "features": features,
+#         }
+
+#     except Exception as e:
+#         st.error(f"Error in prediction: {e}")
+#         return None
+
+
+# def main():
+#     st.title("📰 AI-Assisted Headline Hunter")
+#     st.write("**Predict engagement and optimize headlines with AI-powered rewriting**")
+
+#     # Load all systems once at startup
+#     with st.spinner("Loading AI systems..."):
+#         model_pipeline = load_model()
+#         preprocessing_components = load_preprocessing_components()
+#         search_system = load_search_system()
+#         llm_rewriter = load_llm_rewriter()
+
+#     # ENHANCED ADMIN PANEL WITH DOWNLOAD BUTTON
+#     st.sidebar.markdown("---")
+#     if st.sidebar.text_input("📊 Analytics (Enter: admin)", type="password") == "admin":
+#         logs = get_usage_stats()
+#         st.sidebar.success("✅ Admin Mode Activated")
+
+#         # Metrics
+#         st.sidebar.metric("Total Interactions", len(logs))
+#         st.sidebar.metric(
+#             "CTR Predictions",
+#             len([l for l in logs if l["event"] == "ctr_prediction"]),
+#         )
+#         st.sidebar.metric(
+#             "Headlines Rewritten",
+#             len([l for l in logs if l["event"] == "headline_rewrite"]),
+#         )
+#         st.sidebar.metric(
+#             "Searches Made", len([l for l in logs if l["event"] == "search"])
+#         )
+
+#         # Download button
+#         if logs:
+#             log_data = "\n".join([json.dumps(log) for log in logs])
+#             st.sidebar.download_button(
+#                 label="📥 Download Analytics Data",
+#                 data=log_data,
+#                 file_name=f"headline_hunter_analytics_{datetime.date.today()}.txt",
+#                 mime="text/plain",
+#             )
+
+#             # Show recent activity
+#             st.sidebar.write("**📈 Recent Activity:**")
+#             for log in logs[-5:]:  # Last 5 events
+#                 st.sidebar.caption(f"• {log['event']} - {log['timestamp'][11:16]}")
+#         else:
+#             st.sidebar.info("No analytics data yet")
+
+#     # Main tabs
+#     (tab1,) = st.tabs(
+#         ["🔮 Predict & Rewrite"]  # "🔍 Search Articles", "📊 Headline Rewrite Analysis"
+#     )
+
+#     # Tab 1: Predict & Rewrite
+#     with tab1:
+#         # Main layout with input on left and guidelines on right
+#         col1, col2 = st.columns([2, 1])
+
+#         with col1:
+#             title = st.text_area(
+#                 "Article Title",
+#                 placeholder="Enter your article headline here...",
+#                 height=100,
+#                 help="Enter the headline you want to test and optimize",
+#             )
+
+#             categories = [
+#                 "news",
+#                 "sports",
+#                 "finance",
+#                 "travel",
+#                 "lifestyle",
+#                 "video",
+#                 "foodanddrink",
+#                 "weather",
+#                 "autos",
+#                 "health",
+#                 "entertainment",
+#                 "tv",
+#                 "music",
+#                 "movies",
+#                 "kids",
+#                 "northamerica",
+#                 "middleeast",
+#                 "unknown",
+#             ]
+
+#             category = st.selectbox("Article Category", categories, index=0)
+
+#             predict_and_rewrite = st.button("🤖 Analyze & Optimize", type="primary")
+
+#         with col2:
+#             # Editorial Guidelines in right column
+#             st.markdown(
+#                 """
+#             <div class="guidelines-box">
+#                 <div class="guidelines-title">💡 Editorial Guidelines</div>
+#                 <div class="guidelines-content">
+#                     <strong>High-engagement headlines:</strong>
+#                     <ul>
+#                         <li>8-12 words optimal</li>
+#                         <li>Include numbers/questions</li>
+#                         <li>High readability (60+ score)</li>
+#                         <li>Front-load key information</li>
+#                         <li>Under 75 characters</li>
+#                     </ul>
+#                 </div>
+#             </div>
+#             """,
+#                 unsafe_allow_html=True,
+#             )
+
+#         # Process prediction and rewriting - FIXED VERSION
+#         if predict_and_rewrite:
+#             if title.strip():
+#                 # Log the event with actual data
+#                 log_event(
+#                     "ctr_prediction",
+#                     {
+#                         "headline": title,
+#                         "category": category,
+#                         "headline_length": len(title),
+#                         "word_count": len(title.split()),
+#                     },
+#                 )
+
+#                 if model_pipeline and preprocessing_components:
+#                     # Step 1: Predict engagement
+#                     with st.spinner("🔮 Analyzing engagement potential..."):
+#                         result = predict_engagement(
+#                             title,
+#                             "",
+#                             category,
+#                             model_pipeline,
+#                             preprocessing_components,
+#                         )
+
+#                     if result and isinstance(result, dict):
+#                         # Get threshold from model pipeline
+#                         threshold = model_pipeline["baseline_metrics"].get(
+#                             "ctr_threshold", 0.05
+#                         )
+
+#                         # Display prediction results
+#                         st.subheader("📊 Engagement Analysis")
+
+#                         col_pred1, col_pred2, col_pred3 = st.columns(3)
+
+#                         with col_pred1:
+#                             # Show engagement level with threshold
+#                             engagement_level = (
+#                                 "High Engagement"
+#                                 if result["high_engagement"]
+#                                 else "Low Engagement"
+#                             )
+#                             engagement_emoji = (
+#                                 "🔥" if result["high_engagement"] else "📉"
+#                             )
+#                             st.metric(
+#                                 "Engagement Level",
+#                                 f"{engagement_emoji} {engagement_level}",
+#                             )
+
+#                         with col_pred2:
+#                             # Show CTR as percentage with threshold
+#                             ctr_percentage = result["estimated_ctr"] * 100
+#                             st.metric("Estimated CTR", f"{ctr_percentage:.2f}%")
+#                             st.caption(f"Threshold: {threshold*100:.1f}%")
+
+#                         # Step 2: Generate AI rewrites
+#                         st.subheader("✨ AI-Optimized Headlines")
+
+#                         if llm_rewriter:
+#                             with st.spinner("🤖 Generating AI-optimized headlines..."):
+#                                 try:
+#                                     article_data = {
+#                                         "category": category,
+#                                         "abstract": "",
+#                                         "current_ctr": result["estimated_ctr"],
+#                                     }
+
+#                                     rewrite_result = llm_rewriter.get_best_headline(
+#                                         title, article_data
+#                                     )
+
+#                                     if (
+#                                         rewrite_result
+#                                         and "best_headline" in rewrite_result
+#                                     ):
+#                                         best_headline = rewrite_result["best_headline"]
+
+#                                         # Log the rewrite event
+#                                         log_event(
+#                                             "headline_rewrite",
+#                                             {
+#                                                 "original": title,
+#                                                 "rewritten": best_headline,
+#                                                 "category": category,
+#                                             },
+#                                         )
+
+#                                         if best_headline.strip() != title.strip():
+#                                             # Predict engagement for the rewritten headline
+#                                             rewritten_result = predict_engagement(
+#                                                 best_headline,
+#                                                 "",
+#                                                 category,
+#                                                 model_pipeline,
+#                                                 preprocessing_components,
+#                                             )
+
+#                                             # Display comparison
+#                                             col_orig, col_rewrite = st.columns(2)
+
+#                                             with col_orig:
+#                                                 st.markdown("**Original Headline:**")
+#                                                 st.info(f"📝 {title}")
+#                                                 st.write(
+#                                                     f"CTR: {result['estimated_ctr']*100:.2f}%"
+#                                                 )
+
+#                                             with col_rewrite:
+#                                                 st.markdown(
+#                                                     "**AI-Optimized Headline:**"
+#                                                 )
+#                                                 st.success(f"✨ {best_headline}")
+
+#                                                 if rewritten_result:
+#                                                     st.write(
+#                                                         f"CTR: {rewritten_result['estimated_ctr']*100:.2f}%"
+#                                                     )
+
+#                                                     # Show improvement
+#                                                     ctr_improvement = (
+#                                                         rewritten_result[
+#                                                             "estimated_ctr"
+#                                                         ]
+#                                                         - result["estimated_ctr"]
+#                                                     ) * 100
+#                                                     if ctr_improvement > 0:
+#                                                         st.success(
+#                                                             f"📈 CTR Improvement: +{ctr_improvement:.2f}%"
+#                                                         )
+#                                                     elif ctr_improvement < 0:
+#                                                         st.warning(
+#                                                             f"📉 CTR Change: {ctr_improvement:.2f}%"
+#                                                         )
+#                                                     else:
+#                                                         st.info(
+#                                                             "📊 No significant change"
+#                                                         )
+
+#                                             # Show all candidates
+#                                             if "all_candidates" in rewrite_result:
+#                                                 with st.expander(
+#                                                     "🔍 View All AI-Generated Candidates"
+#                                                 ):
+#                                                     for i, (
+#                                                         candidate,
+#                                                         ctr,
+#                                                     ) in enumerate(
+#                                                         rewrite_result[
+#                                                             "all_candidates"
+#                                                         ],
+#                                                         1,
+#                                                     ):
+#                                                         st.write(
+#                                                             f"{i}. **{candidate}** (CTR: {ctr*100:.2f}%)"
+#                                                         )
+#                                         else:
+#                                             st.info(
+#                                                 "🎯 Original headline is already well-optimized!"
+#                                             )
+
+#                                             # Show the analysis anyway
+#                                             if "all_candidates" in rewrite_result:
+#                                                 with st.expander(
+#                                                     "🔍 View Alternative Suggestions"
+#                                                 ):
+#                                                     for i, (
+#                                                         candidate,
+#                                                         ctr,
+#                                                     ) in enumerate(
+#                                                         rewrite_result[
+#                                                             "all_candidates"
+#                                                         ],
+#                                                         1,
+#                                                     ):
+#                                                         if candidate != title:
+#                                                             st.write(
+#                                                                 f"{i}. **{candidate}** (CTR: {ctr*100:.2f}%)"
+#                                                             )
+#                                     else:
+#                                         st.warning(
+#                                             "🤔 No rewrite suggestions generated"
+#                                         )
+
+#                                 except Exception as e:
+#                                     st.error(f"❌ Rewriting failed: {e}")
+
+#                                     # Show the exact error for debugging
+#                                     with st.expander("🔍 Debug Info"):
+#                                         import traceback
+
+#                                         st.code(traceback.format_exc())
+#                         else:
+#                             st.error(
+#                                 "❌ AI Rewriter not available. Please check your OpenAI API key."
+#                             )
+
+#                     else:
+#                         st.error("❌ Prediction failed. Please check your inputs.")
+#                 else:
+#                     st.error("❌ Model or preprocessing components not loaded.")
+#             else:
+#                 st.warning("⚠️ Please enter an article title.")
+
+#     # # Tab 2: Search Articles
+#     # with tab2:
+#     #     st.header("Search Articles")
+
+#     #     search_query = st.text_input(
+#     #         "Search Query",
+#     #         placeholder="Enter keywords or describe the topic...",
+#     #         help="Search through articles by keywords, title, or content.",
+#     #     )
+
+#     #     col_search1, col_search2 = st.columns(2)
+#     #     with col_search1:
+#     #         num_results = st.slider("Number of results", 5, 20, 10)
+
+#     #     if st.button("🔍 Search", type="primary"):
+#     #         if search_query.strip() and search_system:
+#     #             # Log the search event
+#     #             log_event(
+#     #                 "search",
+#     #                 {"query": search_query, "num_results_requested": num_results},
+#     #             )
+
+#     #             with st.spinner("Searching articles..."):
+#     #                 try:
+#     #                     embedder = load_embedder()
+#     #                     query_embedding = embedder.encode([search_query])
+#     #                     query_embedding = query_embedding.astype(np.float32)
+#     #                     faiss.normalize_L2(query_embedding)
+
+#     #                     search_k = num_results * 3
+#     #                     distances, indices = search_system["index"].search(
+#     #                         query_embedding, search_k
+#     #                     )
+
+#     #                     results = []
+#     #                     for dist, idx in zip(distances[0], indices[0]):
+#     #                         if idx in search_system["mappings"]["idx_to_article_id"]:
+#     #                             article_id = search_system["mappings"][
+#     #                                 "idx_to_article_id"
+#     #                             ][idx]
+#     #                             if article_id in search_system["article_lookup"]:
+#     #                                 article_info = search_system["article_lookup"][
+#     #                                     article_id
+#     #                                 ].copy()
+#     #                                 l2_distance = float(dist)
+#     #                                 similarity_score = 1.0 / (1.0 + l2_distance)
+#     #                                 article_info["similarity_score"] = similarity_score
+#     #                                 results.append(article_info)
+
+#     #                                 if len(results) >= num_results:
+#     #                                     break
+
+#     #                     if results:
+#     #                         st.subheader(f"📰 Found {len(results)} articles")
+#     #                         for i, article in enumerate(results, 1):
+#     #                             with st.expander(f"{i}. {article['title'][:70]}..."):
+#     #                                 col_art1, col_art2 = st.columns([3, 1])
+
+#     #                                 with col_art1:
+#     #                                     st.write(f"**Title:** {article['title']}")
+#     #                                     if article.get("abstract"):
+#     #                                         abstract_preview = (
+#     #                                             article["abstract"][:200] + "..."
+#     #                                             if len(article["abstract"]) > 200
+#     #                                             else article["abstract"]
+#     #                                         )
+#     #                                         st.write(
+#     #                                             f"**Abstract:** {abstract_preview}"
+#     #                                         )
+
+#     #                                 with col_art2:
+#     #                                     st.metric(
+#     #                                         "Similarity",
+#     #                                         f"{article['similarity_score']:.3f}",
+#     #                                     )
+#     #                                     st.write(f"**Category:** {article['category']}")
+
+#     #                                     if not pd.isna(article.get("ctr")):
+#     #                                         st.write(
+#     #                                             f"**CTR:** {article['ctr']*100:.2f}%"
+#     #                                         )
+
+#     #                                     if not pd.isna(article.get("high_engagement")):
+#     #                                         engagement_status = (
+#     #                                             "🔥 High"
+#     #                                             if article["high_engagement"]
+#     #                                             else "📉 Low"
+#     #                                         )
+#     #                                         st.write(
+#     #                                             f"**Engagement:** {engagement_status}"
+#     #                                         )
+#     #                     else:
+#     #                         st.info("No articles found. Try different keywords.")
+#     #                 except Exception as e:
+#     #                     st.error(f"Search failed: {e}")
+#     #         else:
+#     #             if not search_query.strip():
+#     #                 st.warning("Please enter a search query.")
+#     #             else:
+#     #                 st.error("Search system not available.")
+
+#     # # Tab 3: Rewrite Analysis
+#     # with tab3:
+#     #     st.header("Headline Rewrite Analysis")
+
+#     #     if search_system and search_system["metadata"].get("rewrite_analysis"):
+#     #         rewrite_stats = search_system["metadata"]["rewrite_analysis"]
+
+#     #         # Load detailed rewrite results if available
+#     #         rewrite_file = FAISS_DIR / "rewrite_analysis" / "headline_rewrites.parquet"
+#     #         if rewrite_file.exists():
+#     #             try:
+#     #                 rewrite_df = pd.read_parquet(rewrite_file)
+
+#     #                 st.subheader("📈 Strategy Performance")
+
+#     #                 # Strategy comparison
+#     #                 if "model_ctr_improvement" in rewrite_df.columns:
+#     #                     strategy_performance = (
+#     #                         rewrite_df.groupby("strategy")
+#     #                         .agg(
+#     #                             {
+#     #                                 "quality_score": "mean",
+#     #                                 "readability_improvement": "mean",
+#     #                                 "model_ctr_improvement": "mean",
+#     #                             }
+#     #                         )
+#     #                         .round(4)
+#     #                     )
+
+#     #                     fig = px.bar(
+#     #                         strategy_performance.reset_index(),
+#     #                         x="strategy",
+#     #                         y="model_ctr_improvement",
+#     #                         title="Average Model-Based CTR Improvement by Strategy",
+#     #                     )
+#     #                     st.plotly_chart(fig, use_container_width=True)
+#     #                 else:
+#     #                     strategy_performance = (
+#     #                         rewrite_df.groupby("strategy")
+#     #                         .agg(
+#     #                             {
+#     #                                 "quality_score": "mean",
+#     #                                 "readability_improvement": "mean",
+#     #                                 "predicted_ctr_improvement": "mean",
+#     #                             }
+#     #                         )
+#     #                         .round(3)
+#     #                     )
+
+#     #                     fig = px.bar(
+#     #                         strategy_performance.reset_index(),
+#     #                         x="strategy",
+#     #                         y="quality_score",
+#     #                         title="Average Quality Score by Strategy",
+#     #                     )
+#     #                     st.plotly_chart(fig, use_container_width=True)
+
+#     #                 # Show detailed results
+#     #                 st.subheader("🔍 Detailed Results")
+
+#     #                 display_columns = [
+#     #                     "original_title",
+#     #                     "strategy",
+#     #                     "rewritten_title",
+#     #                     "quality_score",
+#     #                     "readability_improvement",
+#     #                     "predicted_ctr_improvement",
+#     #                 ]
+
+#     #                 if "model_ctr_improvement" in rewrite_df.columns:
+#     #                     display_columns.extend(
+#     #                         ["model_ctr_improvement", "original_ctr", "rewritten_ctr"]
+#     #                     )
+
+#     #                 available_columns = [
+#     #                     col for col in display_columns if col in rewrite_df.columns
+#     #                 ]
+#     #                 st.dataframe(
+#     #                     rewrite_df[available_columns].head(20), use_container_width=True
+#     #                 )
+
+#     #             except Exception as e:
+#     #                 st.error(f"Error loading rewrite analysis: {e}")
+#     #         else:
+#     #             st.info(
+#     #                 "Detailed rewrite analysis not available. Run the FAISS index creation script to generate analysis."
+#     #             )
+#     #     else:
+#     #         st.info(
+#     #             "No rewrite analysis available. The system may be running in offline mode."
+#     #         )
+
+#     # Footer
+#     st.markdown("---")
+#     st.markdown(
+#         "**Article Engagement Predictor & AI Rewriter** | Built with Streamlit, XGBoost, and OpenAI"
+#     )
+
+
+# if __name__ == "__main__":
+#     main()
