@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 import warnings
-from llm_rewriter import LLMHeadlineRewriter
+from llm_rewriter import EnhancedLLMHeadlineRewriter
 
 warnings.filterwarnings("ignore")
 
@@ -106,7 +106,7 @@ print(
     f"\nStep 3: Analyzing headline rewrites with LLM ({CONFIG['rewrite_sample_size']} samples)..."
 )
 
-rewriter = LLMHeadlineRewriter()
+rewriter = EnhancedLLMHeadlineRewriter()
 
 # Select low-performing headlines for rewriting analysis
 low_performing_headlines = train_metadata[

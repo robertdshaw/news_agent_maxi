@@ -19,7 +19,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from textstat import flesch_reading_ease
 import warnings
-from llm_rewriter import EfficientLLMHeadlineRewriter
+from llm_rewriter import EnhancedLLMHeadlineRewriter
 from feature_utils import create_article_features_exact, load_preprocessing_components
 
 warnings.filterwarnings("ignore")
@@ -232,22 +232,22 @@ def load_llm_rewriter():
                     # Fall back to project root
                     eda_insights_path = "headline_eda_insights.json"
 
-                return EfficientLLMHeadlineRewriter(
+                return EnhancedLLMHeadlineRewriter(
                     model_pipeline=model_pipeline,
                     components=components,
                     eda_insights_path=eda_insights_path,
                 )
             except Exception as e:
-                st.warning(f"EfficientLLMHeadlineRewriter failed: {e}")
+                st.warning(f"EnhancedLLMHeadlineRewriter failed: {e}")
                 # Fall back to basic LLM rewriter
                 try:
-                    from llm_rewriter import LLMHeadlineRewriter
+                    from llm_rewriter import EnhancedLLMHeadlineRewriter
 
-                    return LLMHeadlineRewriter(
+                    return EnhancedLLMHeadlineRewriter(
                         model_pipeline=model_pipeline, components=components
                     )
                 except Exception as e2:
-                    st.warning(f"Basic LLMHeadlineRewriter also failed: {e2}")
+                    st.warning(f"Basic EnhancedLLMHeadlineRewriter also failed: {e2}")
                     return None
         else:
             st.warning("Could not load model pipeline or components for rewriter")
