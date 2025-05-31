@@ -223,37 +223,30 @@ def load_llm_rewriter():
         components = load_preprocessing_components()
 
         if model_pipeline and components:
-            try:
-                # Try the preprocessed data directory first
-                eda_insights_path = (
-                    "data/preprocessed/processed_data/headline_eda_insights.json"
-                )
-                if not Path(eda_insights_path).exists():
-                    # Fall back to project root
-                    eda_insights_path = "headline_eda_insights.json"
+            # Try the preprocessed data directory first
+            eda_insights_path = (
+                "data/preprocessed/processed_data/headline_eda_insights.json"
+            )
+            if not Path(eda_insights_path).exists():
+                # Fall back to project root
+                eda_insights_path = "headline_eda_insights.json"
 
-                return EnhancedLLMHeadlineRewriter(
-                    model_pipeline=model_pipeline,
-                    components=components,
-                    eda_insights_path=eda_insights_path,
-                )
-            except Exception as e:
-                st.warning(f"EnhancedLLMHeadlineRewriter failed: {e}")
-                # Fall back to basic LLM rewriter
-                try:
-                    from llm_rewriter import EnhancedLLMHeadlineRewriter
-
-                    return EnhancedLLMHeadlineRewriter(
-                        model_pipeline=model_pipeline, components=components
-                    )
-                except Exception as e2:
-                    st.warning(f"Basic EnhancedLLMHeadlineRewriter also failed: {e2}")
-                    return None
+            return EnhancedLLMHeadlineRewriter(
+                model_pipeline=model_pipeline,
+                components=components,
+                eda_insights_path=eda_insights_path,
+            )
         else:
             st.warning("Could not load model pipeline or components for rewriter")
             return None
+
     except Exception as e:
         st.error(f"Error loading LLM rewriter: {e}")
+        # Show the actual error for debugging
+        with st.expander("🔍 Debug Info"):
+            import traceback
+
+            st.code(traceback.format_exc())
         return None
 
 
