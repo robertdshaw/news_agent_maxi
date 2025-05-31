@@ -289,7 +289,7 @@ Generate 4 headlines focusing on STRUCTURE and proven features:
 
 Return ONLY 4 headlines, one per line:"""
 
-        return self._call_llm(prompt, temperature=0.7)
+        return self._call_llm(prompt, temperature=0.8)
 
     def _generate_layer_2_candidates(
         self, layer_1_results, original_title, article_data, persona
