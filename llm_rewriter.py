@@ -131,6 +131,64 @@ class EnhancedLLMHeadlineRewriter:
             },
         }
 
+    def get_best_headline(self, original_headline, article_data):
+        """Get best headline with stricter quality requirements"""
+
+        # Generate candidates
+        candidates = self.generate_candidates(original_headline, article_data)
+
+        # Filter for quality
+        meaningful_candidates = self.filter_meaningful_rewrites(
+            original_headline,
+            candidates,
+            min_improvement=0.02,  # At least 2% CTR improvement
+            min_word_diff=0.3,  # At least 30% different words
+        )
+
+        # If no meaningful improvements, return original
+        if not meaningful_candidates:
+            return {
+                "best_headline": original_headline,
+                "improvement_reason": "original_already_optimized",
+                "all_candidates": candidates[:3],  # Show what was tried
+            }
+
+        # Return best meaningful candidate
+        best = max(meaningful_candidates, key=lambda x: x[1])
+
+        return {
+            "best_headline": best[0],
+            "predicted_ctr": best[1],
+            "improvement_reason": "significant_optimization",
+            "all_candidates": meaningful_candidates,
+        }
+
+    def filter_meaningful_rewrites(
+        self, original, candidates, min_improvement=0.02, min_word_diff=0.3
+    ):
+        """Filter out low-quality rewrites"""
+        filtered = []
+
+        original_words = set(original.lower().split())
+
+        for candidate, predicted_ctr in candidates:
+            # Skip if too similar
+            candidate_words = set(candidate.lower().split())
+            word_overlap = len(original_words & candidate_words) / len(
+                original_words | candidate_words
+            )
+
+            if word_overlap > (1 - min_word_diff):  # Too similar
+                continue
+
+            # Skip if improvement is too small
+            if predicted_ctr < self.baseline_ctr + min_improvement:
+                continue
+
+            filtered.append((candidate, predicted_ctr))
+
+        return filtered
+
     def _identify_persona(self, article_data):
         """Identify target persona from article data"""
         category = article_data.get("category", "news").lower()
