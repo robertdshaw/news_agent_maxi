@@ -536,29 +536,40 @@ def process_batch_headlines(uploaded_file, llm_rewriter, model_pipeline, compone
 
 def main():
     # Header with custom logo - Mobile optimized
-    st.markdown(
-        """
-    <div class="main-header">
-        <div class="header-content" style="display: flex; align-items: center; justify-content: center; gap: 25px; margin-bottom: 0.5rem;">
-            <svg class="header-logo" width="80" height="80" viewBox="0 0 600 600" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <!-- Orange lines -->
-                <line x1="150" y1="150" x2="450" y2="450" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
-                <line x1="200" y1="100" x2="500" y2="400" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
-                <line x1="100" y1="200" x2="400" y2="500" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
-                <!-- Purple lines -->
-                <line x1="450" y1="150" x2="150" y2="450" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
-                <line x1="500" y1="200" x2="200" y2="500" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
-                <line x1="400" y1="100" x2="100" y2="400" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
-            </svg>
-            <div style="text-align: center;">
-                <h1 class="header-title" style="margin: 0; color: white; font-size: 3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em;">Headline Hunter</h1>
-                <div class="header-tagline" style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-top: 0.3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 400;">AI-powered headline optimization that drives engagement</div>
+
+    # At the top of your main() function:
+    try:
+        logo_path = "NEXUS_MARK_cmyk_page-0001-remove-background.com.png"
+        if Path(logo_path).exists():
+            # Use st.image or base64 encode it
+            with open(logo_path, "rb") as f:
+                logo_data = f.read()
+                st.image(logo_data, caption="Logo", use_column_width=True)
+    except:
+        # Use fallback
+        st.markdown(
+            """
+        <div class="main-header">
+            <div class="header-content" style="display: flex; align-items: center; justify-content: center; gap: 25px; margin-bottom: 0.5rem;">
+                <svg class="header-logo" width="80" height="80" viewBox="0 0 600 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Orange lines -->
+                    <line x1="150" y1="150" x2="450" y2="450" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
+                    <line x1="200" y1="100" x2="500" y2="400" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
+                    <line x1="100" y1="200" x2="400" y2="500" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
+                    <!-- Purple lines -->
+                    <line x1="450" y1="150" x2="150" y2="450" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
+                    <line x1="500" y1="200" x2="200" y2="500" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
+                    <line x1="400" y1="100" x2="100" y2="400" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
+                </svg>
+                <div style="text-align: center;">
+                    <h1 class="header-title" style="margin: 0; color: white; font-size: 3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em;">Headline Hunter</h1>
+                    <div class="header-tagline" style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-top: 0.3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 400;">AI-powered headline optimization that drives engagement</div>
+                </div>
             </div>
         </div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
+        """,
+            unsafe_allow_html=True,
+        )
 
     # Load all systems once at startup
     with st.spinner("Loading AI systems..."):
