@@ -69,18 +69,68 @@ MODEL_DIR = Path("model_output")
 FAISS_DIR = Path("faiss_index")
 PREP_DIR = Path("data/preprocessed")
 
-# Enhanced CSS Styles
+# Enhanced CSS Styles with Mobile Optimization
 st.markdown(
     """
     <style>
       .main-header {
         background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
+        padding: 1.5rem;
         border-radius: 10px;
         color: white;
         text-align: center;
         margin-bottom: 2rem;
       }
+      
+      /* Mobile-responsive header */
+      @media (max-width: 768px) {
+        .main-header {
+          padding: 1rem;
+          margin-bottom: 1rem;
+        }
+        .header-content {
+          flex-direction: column !important;
+          gap: 15px !important;
+        }
+        .header-logo {
+          width: 60px !important;
+          height: 60px !important;
+        }
+        .header-title {
+          font-size: 2rem !important;
+          line-height: 1.2 !important;
+        }
+        .header-tagline {
+          font-size: 0.9rem !important;
+          margin-top: 0.5rem !important;
+        }
+      }
+      
+      /* Mobile-responsive tips */
+      .quick-tips {
+        background-color: #e7f3ff;
+        border: 2px solid #0066cc;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 15px 0;
+      }
+      
+      @media (max-width: 768px) {
+        .quick-tips {
+          padding: 12px;
+          margin: 10px 0;
+        }
+        .tips-title {
+          font-size: 16px !important;
+          margin-bottom: 10px !important;
+        }
+        .tip-item {
+          font-size: 14px !important;
+          margin: 6px 0 !important;
+          padding-left: 25px !important;
+        }
+      }
+      
       .metric-card {
         background-color: white;
         padding: 1.5rem;
@@ -89,6 +139,14 @@ st.markdown(
         margin-bottom: 1rem;
         border-left: 4px solid #667eea;
       }
+      
+      @media (max-width: 768px) {
+        .metric-card {
+          padding: 1rem;
+          margin-bottom: 0.75rem;
+        }
+      }
+      
       .improvement-positive {
         background-color: #d4edda;
         border-left: 4px solid #28a745;
@@ -110,13 +168,15 @@ st.markdown(
         border-radius: 5px;
         margin: 0.5rem 0;
       }
-      .quick-tips {
-        background-color: #e7f3ff;
-        border: 2px solid #0066cc;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 20px 0;
+      
+      @media (max-width: 768px) {
+        .improvement-positive, .improvement-negative, .improvement-neutral {
+          padding: 0.75rem;
+          margin: 0.4rem 0;
+          font-size: 14px;
+        }
       }
+      
       .tips-title {
         font-weight: bold;
         font-size: 18px;
@@ -128,30 +188,46 @@ st.markdown(
         color: #333;
         padding-left: 20px;
         position: relative;
+        font-size: 15px;
+        line-height: 1.4;
       }
       .tip-item:before {
         content: "💡";
         position: absolute;
         left: 0;
       }
-      .batch-section {
-        background-color: #f8f9fa;
-        padding: 2rem;
-        border-radius: 10px;
-        margin: 2rem 0;
-        border: 1px solid #dee2e6;
-      }
+      
       .comparison-container {
         display: flex;
         gap: 20px;
         margin: 20px 0;
       }
+      
+      @media (max-width: 768px) {
+        .comparison-container {
+          flex-direction: column;
+          gap: 15px;
+          margin: 15px 0;
+        }
+      }
+      
       .comparison-box {
         flex: 1;
         padding: 20px;
         border-radius: 10px;
         border: 2px solid #ddd;
       }
+      
+      @media (max-width: 768px) {
+        .comparison-box {
+          padding: 15px;
+        }
+        .comparison-box h4 {
+          font-size: 16px;
+          margin-bottom: 10px;
+        }
+      }
+      
       .original-box {
         background-color: #fff5f5;
         border-color: #fed7d7;
@@ -159,6 +235,41 @@ st.markdown(
       .optimized-box {
         background-color: #f0fff4;
         border-color: #9ae6b4;
+      }
+      
+      /* Mobile-responsive mode selector */
+      @media (max-width: 768px) {
+        .stRadio > div {
+          flex-direction: column !important;
+          gap: 10px !important;
+        }
+        .stRadio > div > label {
+          margin-right: 0 !important;
+          margin-bottom: 8px !important;
+        }
+      }
+      
+      /* Mobile text areas and inputs */
+      @media (max-width: 768px) {
+        .stTextArea textarea {
+          font-size: 16px !important; /* Prevents zoom on iOS */
+        }
+        .stTextInput input {
+          font-size: 16px !important; /* Prevents zoom on iOS */
+        }
+        .stSelectbox select {
+          font-size: 16px !important;
+        }
+      }
+      
+      /* Better mobile button spacing */
+      @media (max-width: 768px) {
+        .stButton button {
+          width: 100%;
+          margin: 10px 0;
+          padding: 12px 20px;
+          font-size: 16px;
+        }
       }
     </style>
     """,
@@ -325,12 +436,11 @@ def get_personalized_tips(features, result, improvement):
     """Generate personalized optimization tips based on analysis"""
     tips = []
 
-    # CTR-based tips
-    if improvement <= 0:
-        tips.append("Consider adding numbers or questions to increase curiosity")
-        tips.append("Try shortening to 8-12 words for optimal engagement")
+    # Only provide tips if there's room for improvement
+    if improvement >= 2:  # If improvement is good, no tips needed
+        return []
 
-    # Feature-based tips
+    # Feature-based tips for headlines that need improvement
     if not features.get("has_number", 0):
         tips.append("Add specific numbers or statistics for credibility")
 
@@ -340,9 +450,10 @@ def get_personalized_tips(features, result, improvement):
     if features.get("title_length", 0) > 75:
         tips.append("Shorten headline - aim for under 75 characters")
 
-    if features.get("title_word_count", 0) < 6:
+    word_count = features.get("title_word_count", 0)
+    if word_count < 6:
         tips.append("Add more context - headlines with 8-12 words perform better")
-    elif features.get("title_word_count", 0) > 15:
+    elif word_count > 15:
         tips.append("Simplify language - long headlines lose engagement")
 
     # Readability tips
@@ -351,10 +462,10 @@ def get_personalized_tips(features, result, improvement):
 
     # Performance-based tips
     if result["estimated_ctr"] < 0.03:
-        tips.append("Consider rewriting entirely - try emotional triggers or urgency")
-        tips.append("Use power words like 'exclusive', 'breaking', or 'revealed'")
+        tips.append("Consider using emotional triggers or urgency words")
+        tips.append("Try power words like 'exclusive', 'breaking', or 'revealed'")
 
-    return tips[:4]  # Return top 4 tips
+    return tips[:3]  # Return top 3 tips
 
 
 def process_batch_headlines(uploaded_file, llm_rewriter, model_pipeline, components):
@@ -424,16 +535,16 @@ def process_batch_headlines(uploaded_file, llm_rewriter, model_pipeline, compone
 
 
 def main():
-    # Header with custom logo
+    # Header with custom logo - Mobile optimized
     st.markdown(
         """
     <div class="main-header">
-        <div style="display: flex; align-items: center; justify-content: center; gap: 25px; margin-bottom: 0.5rem;">
-            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8IS0tIE9yYW5nZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iMTUiIHkxPSIxNSIgeDI9IjQ1IiB5Mj0iNDUiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMjAiIHkxPSIxMCIgeDI9IjUwIiB5Mj0iNDAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMTAiIHkxPSIyMCIgeDI9IjQwIiB5Mj0iNTAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8IS0tIFB1cnBsZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iNDUiIHkxPSIxNSIgeDI9IjE1IiB5Mj0iNDUiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNTAiIHkxPSIyMCIgeDI9IjIwIiB5Mj0iNTAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNDAiIHkxPSIxMCIgeDI9IjEwIiB5Mj0iNDAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+" 
+        <div class="header-content" style="display: flex; align-items: center; justify-content: center; gap: 25px; margin-bottom: 0.5rem;">
+            <img class="header-logo" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8IS0tIE9yYW5nZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iMTUiIHkxPSIxNSIgeDI9IjQ1IiB5Mj0iNDUiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMjAiIHkxPSIxMCIgeDI9IjUwIiB5Mj0iNDAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMTAiIHkxPSIyMCIgeDI9IjQwIiB5Mj0iNTAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8IS0tIFB1cnBsZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iNDUiIHkxPSIxNSIgeDI9IjE1IiB5Mj0iNDUiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNTAiIHkxPSIyMCIgeDI9IjIwIiB5Mj0iNTAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNDAiIHkxPSIxMCIgeDI9IjEwIiB5Mj0iNDAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz>
                  style="width: 80px; height: 80px;" alt="Logo">
             <div style="text-align: center;">
-                <h1 style="margin: 0; color: white; font-size: 3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em;">Headline Hunter</h1>
-                <div style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-top: 0.3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 400;">AI-powered headline optimization that drives engagement</div>
+                <h1 class="header-title" style="margin: 0; color: white; font-size: 3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em;">Headline Hunter</h1>
+                <div class="header-tagline" style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-top: 0.3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 400;">AI-powered headline optimization that drives engagement</div>
             </div>
         </div>
     </div>
@@ -519,12 +630,12 @@ def main():
             st.markdown(
                 """
             <div class="quick-tips">
-                <div class="tips-title">💡 Quick Tips</div>
-                <div class="tip-item">Use 8-12 words for best results</div>
-                <div class="tip-item">Include numbers when relevant</div>
-                <div class="tip-item">Ask questions to spark curiosity</div>
-                <div class="tip-item">Keep under 75 characters</div>
-                <div class="tip-item">Front-load key information</div>
+                <div class="tips-title">🚀 How to Use</div>
+                <div class="tip-item">Enter your headline in the text box</div>
+                <div class="tip-item">Select the appropriate category</div>
+                <div class="tip-item">Click "Optimize Headline" to see results</div>
+                <div class="tip-item">Compare original vs optimized performance</div>
+                <div class="tip-item">Try batch mode for multiple headlines</div>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -573,27 +684,16 @@ def main():
                         col_orig, col_opt = st.columns(2)
 
                         with col_orig:
-                            st.markdown(
-                                """
-                            <div class="comparison-box original-box">
-                                <h4>📝 Original Headline</h4>
-                            </div>
-                            """,
-                                unsafe_allow_html=True,
-                            )
+                            st.markdown("**📝 Original Headline**")
                             st.info(title)
                             st.metric("Estimated CTR", f"{original_ctr*100:.2f}%")
 
                         with col_opt:
-                            st.markdown(
-                                """
-                            <div class="comparison-box optimized-box">
-                                <h4>✨ Optimized Headline</h4>
-                            </div>
-                            """,
-                                unsafe_allow_html=True,
-                            )
-                            st.success(optimized_headline)
+                            st.markdown("**✨ Optimized Headline**")
+                            if optimized_headline != title:
+                                st.success(optimized_headline)
+                            else:
+                                st.info(optimized_headline)
                             st.metric(
                                 "Estimated CTR",
                                 f"{optimized_ctr*100:.2f}%",
@@ -633,14 +733,21 @@ def main():
                             unsafe_allow_html=True,
                         )
 
-                        # Personalized tips
-                        tips = get_personalized_tips(
-                            original_result["features"], original_result, improvement
-                        )
-                        if tips:
-                            st.markdown("### 💡 Personalized Tips for Better Headlines")
-                            for tip in tips:
-                                st.markdown(f"• {tip}")
+                        # Personalized tips - only show if there's meaningful room for improvement
+                        if (
+                            improvement < 2
+                        ):  # Only show tips if improvement is less than 2%
+                            tips = get_personalized_tips(
+                                original_result["features"],
+                                original_result,
+                                improvement,
+                            )
+                            if tips:
+                                st.markdown(
+                                    "### 💡 Personalized Tips for Better Headlines"
+                                )
+                                for tip in tips:
+                                    st.markdown(f"• {tip}")
 
     elif mode == "📊 Batch Upload":
         # Batch upload section
@@ -838,6 +945,7 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
     main()
 # import os
 # import torch
