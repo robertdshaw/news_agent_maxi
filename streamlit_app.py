@@ -544,8 +544,11 @@ def main():
         preprocessing_components = load_preprocessing_components()
         llm_rewriter = load_llm_rewriter()
 
-    # Admin panel in sidebar - hidden unless you have the password
+    # Add this to your admin code section, right after checking the password:
+
+    # Admin panel in sidebar - completely hidden unless you have the password
     admin_key = os.getenv("ADMIN_PASSWORD")
+
     if admin_key:
         # Only show password field if ADMIN_PASSWORD is set
         entered_password = st.sidebar.text_input(
@@ -579,6 +582,30 @@ def main():
                     file_name=f"analytics_{datetime.date.today()}.txt",
                     mime="text/plain",
                 )
+        else:
+            # Wrong password or no password entered - hide entire sidebar
+            st.markdown(
+                """
+            <style>
+            .css-1d391kg {display: none !important;}
+            section[data-testid="stSidebar"] {display: none !important;}
+            .css-1lcbmhc {display: none !important;}
+            </style>
+            """,
+                unsafe_allow_html=True,
+            )
+    else:
+        # No admin password set - completely hide sidebar
+        st.markdown(
+            """
+        <style>
+        .css-1d391kg {display: none !important;}
+        section[data-testid="stSidebar"] {display: none !important;}
+        .css-1lcbmhc {display: none !important;}
+        </style>
+        """,
+            unsafe_allow_html=True,
+        )
 
     # Mode selector
     mode = st.radio(
