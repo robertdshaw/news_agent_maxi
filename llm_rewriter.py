@@ -761,6 +761,219 @@ Top starting words: {', '.join(sports_starters)}"""
 
 Return ONLY the 4 headlines, one per line, no numbering."""
 
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=250,
+                temperature=0.8,
+            )
+
+            candidates = [original_title]  # Always include original
+            lines = response.choices[0].message.content.strip().split("\n")
+
+            for line in lines:
+                cleaned = self._clean_response(line)
+                if cleaned and cleaned != original_title:
+                    candidates.append(cleaned)
+
+            return candidates[:5]  # Max 5 candidates
+
+        except Exception as e:
+            logging.error(f"LLM candidate generation failed: {e}")
+            return [original_title]
+
+    def _clean_response(self, response):
+        """Clean LLM response"""
+        # Remove quotes, numbering, and extra whitespace
+        response = re.sub(r'^["\']|["\']$', "", response)
+        response = re.sub(r"^\d+[\.\)]\s*", "", response)  # Remove numbering
+        response = response.split("\n")[0]  # Take first line only
+        return response.strip()
+
+    def enable_multi_layer(self, enable=True):
+        """Enable or disable multi-layer optimization"""
+        self.config["enable_multi_layer"] = enable
+        logging.info(f"Multi-layer optimization: {'Enabled' if enable else 'Disabled'}")
+
+    def get_layer_performance_analysis(self, original_title, article_data):
+        """Analyze performance at each layer for debugging"""
+
+        if not self.config["enable_multi_layer"]:
+            return {"error": "Multi-layer optimization is disabled"}
+
+        persona = self._identify_persona(article_data)
+        original_ctr = self.predict_ctr_with_model(original_title, article_data)
+
+        analysis = {
+            "original_title": original_title,
+            "original_ctr": original_ctr,
+            "persona": persona,
+            "layers": {},
+        }
+
+        # Layer 1
+        layer_1_candidates = self._generate_layer_1_candidates(
+            original_title, article_data, persona
+        )
+        layer_1_results = self._evaluate_candidates(layer_1_candidates, article_data)
+        analysis["layers"]["layer_1"] = {
+            "candidates": layer_1_candidates,
+            "scores": (
+                [layer_1_results["all_scores"]]
+                if "all_scores" in layer_1_results
+                else []
+            ),
+            "best": layer_1_results["best_headline"],
+            "best_score": layer_1_results["best_score"],
+            "improvement": layer_1_results["best_score"] - original_ctr,
+        }
+
+        # Layer 2 (if Layer 1 improved)
+        if layer_1_results["best_score"] > original_ctr + 0.001:
+            layer_2_candidates = self._generate_layer_2_candidates(
+                layer_1_results, original_title, article_data, persona
+            )
+            layer_2_results = self._evaluate_candidates(
+                layer_2_candidates, article_data
+            )
+            analysis["layers"]["layer_2"] = {
+                "candidates": layer_2_candidates,
+                "scores": (
+                    [layer_2_results["all_scores"]]
+                    if "all_scores" in layer_2_results
+                    else []
+                ),
+                "best": layer_2_results["best_headline"],
+                "best_score": layer_2_results["best_score"],
+                "improvement": layer_2_results["best_score"] - original_ctr,
+            }
+
+            # Layer 3 (if Layer 2 improved further)
+            if layer_2_results["best_score"] > layer_1_results["best_score"]:
+                layer_3_candidates = self._generate_layer_3_candidates(
+                    layer_2_results, original_title, article_data, persona
+                )
+                layer_3_results = self._evaluate_candidates(
+                    layer_3_candidates, article_data
+                )
+                analysis["layers"]["layer_3"] = {
+                    "candidates": layer_3_candidates,
+                    "scores": (
+                        [layer_3_results["all_scores"]]
+                        if "all_scores" in layer_3_results
+                        else []
+                    ),
+                    "best": layer_3_results["best_headline"],
+                    "best_score": layer_3_results["best_score"],
+                    "improvement": layer_3_results["best_score"] - original_ctr,
+                }
+
+        return analysis
+
+    def run_comparison_test(self, test_headlines, article_data_list=None):
+        """Run A/B test comparison between original and enhanced methods"""
+
+        if article_data_list is None:
+            article_data_list = [
+                {"category": "news", "abstract": ""} for _ in test_headlines
+            ]
+
+        comparison_results = []
+
+        for i, (headline, article_data) in enumerate(
+            zip(test_headlines, article_data_list)
+        ):
+
+            # Original method
+            original_setting = self.config["enable_multi_layer"]
+            self.config["enable_multi_layer"] = False
+            original_result = self.get_best_headline(headline, article_data)
+
+            # Enhanced method
+            self.config["enable_multi_layer"] = True
+            enhanced_result = self.get_best_headline_enhanced(headline, article_data)
+
+            # Restore setting
+            self.config["enable_multi_layer"] = original_setting
+
+            comparison_results.append(
+                {
+                    "test_id": i,
+                    "original_headline": headline,
+                    "original_method_result": original_result["best_headline"],
+                    "original_method_ctr": original_result["predicted_ctr"],
+                    "enhanced_method_result": enhanced_result["best_headline"],
+                    "enhanced_method_ctr": enhanced_result["predicted_ctr"],
+                    "enhancement_advantage": enhanced_result["predicted_ctr"]
+                    - original_result["predicted_ctr"],
+                    "persona": enhanced_result.get("persona", "unknown"),
+                    "best_layer": enhanced_result.get("best_layer", "single"),
+                    "layers_used": len(enhanced_result.get("layer_results", {})),
+                }
+            )
+
+        df = pd.DataFrame(comparison_results)
+
+        # Summary statistics
+        summary = {
+            "total_tests": len(df),
+            "enhanced_wins": len(df[df["enhancement_advantage"] > 0]),
+            "original_wins": len(df[df["enhancement_advantage"] < 0]),
+            "ties": len(df[df["enhancement_advantage"] == 0]),
+            "avg_enhancement_advantage": df["enhancement_advantage"].mean(),
+            "median_enhancement_advantage": df["enhancement_advantage"].median(),
+            "max_improvement": df["enhancement_advantage"].max(),
+            "persona_distribution": df["persona"].value_counts().to_dict(),
+            "layer_distribution": df["best_layer"].value_counts().to_dict(),
+        }
+
+        return df, summary
+
+    def export_performance_report(
+        self, test_results_df, filename="headline_optimization_report.html"
+    ):
+        """Export a comprehensive performance report"""
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Headline Optimization Performance Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                .metric {{ background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+                .improvement {{ color: green; font-weight: bold; }}
+                .decline {{ color: red; font-weight: bold; }}
+                table {{ border-collapse: collapse; width: 100%; }}
+                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                th {{ background-color: #f2f2f2; }}
+            </style>
+        </head>
+        <body>
+            <h1>Enhanced Headline Optimization Report</h1>
+            
+            <div class="metric">
+                <h3>Overall Performance</h3>
+                <p>Total Tests: {len(test_results_df)}</p>
+                <p>Enhanced Method Wins: {len(test_results_df[test_results_df['enhancement_advantage'] > 0]) if 'enhancement_advantage' in test_results_df.columns else 'N/A'}</p>
+                <p>Average CTR Improvement: <span class="{'improvement' if 'enhancement_advantage' in test_results_df.columns and test_results_df['enhancement_advantage'].mean() > 0 else 'decline'}">{test_results_df['enhancement_advantage'].mean() if 'enhancement_advantage' in test_results_df.columns else 'N/A':.6f}</span></p>
+                <p>Best Single Improvement: {test_results_df['enhancement_advantage'].max() if 'enhancement_advantage' in test_results_df.columns else 'N/A':.6f}</p>
+            </div>
+            
+            <h3>Detailed Results</h3>
+            {test_results_df.to_html(index=False)}
+            
+        </body>
+        </html>
+        """
+
+        with open(filename, "w") as f:
+            f.write(html_content)
+
+        logging.info(f"Performance report exported to {filename}")
+        return filename
+
 
 # import os
 # import re
