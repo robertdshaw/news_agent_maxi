@@ -79,8 +79,15 @@ try:
     pca_transformer = None
     pca_file = PREP_DIR / "processed_data" / "pca_transformer.pkl"
     if pca_file.exists():
-        with open(pca_file, "rb") as f:
-            pca_transformer = pickle.load(f)
+        try:
+            with open(pca_file, "rb") as f:
+                pca_transformer = pickle.load(f)
+            print(f"✅ PCA transformer loaded: {type(pca_transformer)}")
+        except Exception as e:
+            print(f"❌ PCA transformer loading failed: {e}")
+            pca_transformer = None
+    else:
+        print("ℹ️ No PCA transformer file found - proceeding without PCA")
 
     # Get training median CTR and feature order
     training_median_ctr = preprocessing_metadata.get("training_median_ctr", 0.030)

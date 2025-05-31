@@ -2,20 +2,20 @@
   "total_rewrites": 8,
   "unique_originals": 2,
   "strategies_tested": [
-    "readability",
+    "comprehensive",
     "engagement",
-    "structure",
-    "comprehensive"
+    "readability",
+    "structure"
   ],
-  "average_quality_improvement": 51.25,
-  "average_readability_improvement": -8.610146103896096,
-  "average_predicted_ctr_improvement": 0.001914723740867458,
-  "average_model_ctr_improvement": 0.0017043384723365307,
+  "average_quality_improvement": 0.19559741161616165,
+  "average_readability_improvement": -7.166420454545458,
+  "average_predicted_ctr_improvement": 0.0,
+  "average_model_ctr_improvement": 0.0011613708920776844,
   "best_performing_strategy_by_model": "structure",
-  "best_performing_strategy_by_quality": "engagement",
-  "semantic_similarity_maintained": 0.5,
+  "best_performing_strategy_by_quality": "comprehensive",
+  "semantic_similarity_maintained": 0.0,
   "model_based_ctr_used": true,
-  "positive_model_improvements": 8,
-  "negative_model_improvements": 0,
-  "best_model_improvement": 0.0036248378455638885
+  "positive_model_improvements": 6,
+  "negative_model_improvements": 2,
+  "best_model_improvement": 0.0038396120071411133
 }
