@@ -19,7 +19,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from textstat import flesch_reading_ease
 import warnings
-from llm_rewriter import EnhancedLLMHeadlineRewriter
+import llm_rewriter
 from feature_utils import create_article_features_exact, load_preprocessing_components
 
 warnings.filterwarnings("ignore")
@@ -231,7 +231,7 @@ def load_llm_rewriter():
                 # Fall back to project root
                 eda_insights_path = "headline_eda_insights.json"
 
-            return EnhancedLLMHeadlineRewriter(
+            return llm_rewriter.EnhancedLLMHeadlineRewriter(
                 model_pipeline=model_pipeline,
                 components=components,
                 eda_insights_path=eda_insights_path,
