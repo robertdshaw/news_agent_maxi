@@ -53,6 +53,38 @@ def get_usage_stats():
         return []
 
 
+from pathlib import Path
+import streamlit as st
+
+# Build a path that’s guaranteed to live in the same folder as this Python file:
+THIS_DIR = Path(__file__).parent
+LOGO_FILENAME = "NEXUS_MARK_cmyk_page-0001-remove-background.com.png"
+logo_path = THIS_DIR / LOGO_FILENAME
+
+# DEBUG: tell us exactly where Python is looking (will show up on the Streamlit page)
+st.write("🔎 Looking for logo at:", logo_path.resolve())
+st.write("  • Exists on disk? ", logo_path.exists())
+
+if logo_path.exists():
+    st.write("✅ Found the logo file — rendering it below:")
+    st.image(str(logo_path), caption="Headline Hunter Logo", use_column_width=True)
+else:
+    st.error("❌ Logo file not found. Make sure the filename and location are correct.")
+    # (fallback below, if you still want an inline SVG header)
+    st.markdown(
+        """
+        <div class="main-header">
+            <!-- INLINE SVG HEADER HERE AS FALLBACK -->
+            <svg class="header-logo" ...> … </svg>
+            <div style="text-align: center;">
+              <h1 class="header-title">Headline Hunter</h1>
+              <div class="header-tagline">AI-powered headline optimization</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # Page configuration
 st.set_page_config(
     page_title="Headline Hunter",
