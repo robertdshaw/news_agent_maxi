@@ -53,6 +53,18 @@ def get_usage_stats():
         return []
 
 
+# Page configuration
+st.set_page_config(
+    page_title="Headline Hunter",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Add this to track page visits
+log_event("page_visit", {"user_agent": "streamlit_user"})
+
+
 from pathlib import Path
 import streamlit as st
 
@@ -84,17 +96,6 @@ else:
         """,
         unsafe_allow_html=True,
     )
-
-# Page configuration
-st.set_page_config(
-    page_title="Headline Hunter",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# Add this to track page visits
-log_event("page_visit", {"user_agent": "streamlit_user"})
 
 # Constants
 MODEL_DIR = Path("model_output")
