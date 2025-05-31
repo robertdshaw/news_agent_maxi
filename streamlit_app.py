@@ -845,33 +845,63 @@ def main():
                             st.metric("Estimated CTR", f"{original_ctr*100:.2f}%")
 
                         with col_opt:
-                            st.markdown("**✨ Optimized Headline**")
-                            if optimized_headline != title:
+                            # Only show as "optimized" if there's meaningful improvement
+                            similarity_threshold = 0.8  # Adjust based on your needs
+
+                            # Calculate similarity (simple word overlap method)
+                            original_words = set(title.lower().split())
+                            optimized_words = set(optimized_headline.lower().split())
+                            word_overlap = len(original_words & optimized_words) / len(
+                                original_words | optimized_words
+                            )
+
+                            # Check if it's a meaningful change
+                            is_meaningful_change = (
+                                optimized_headline != title
+                                and improvement > 1.0  # At least 1% improvement
+                                and word_overlap
+                                < similarity_threshold  # Not too similar
+                            )
+
+                            if is_meaningful_change:
+                                st.markdown("**✨ Optimized Headline**")
                                 st.success(optimized_headline)
-                            else:
+                            elif optimized_headline != title:
+                                st.markdown("**🔄 Alternative Headline**")
                                 st.info(optimized_headline)
+                                st.caption(
+                                    "Minor variation - original may already be well-optimized"
+                                )
+                            else:
+                                st.markdown("**✅ Current Headline**")
+                                st.info(optimized_headline)
+
                             st.metric(
                                 "Estimated CTR",
                                 f"{optimized_ctr*100:.2f}%",
                                 f"{improvement:+.1f}%",
                             )
 
-                        # Improvement summary
+                        # Improvement summary with better thresholds
                         if improvement > 5:
                             st.success(
                                 f"🎉 **Excellent!** {improvement:+.1f}% CTR improvement"
                             )
-                        elif improvement > 0:
+                        elif improvement > 2:
                             st.success(
                                 f"📈 **Good improvement:** {improvement:+.1f}% CTR boost"
                             )
-                        elif improvement > -2:
+                        elif improvement > 0.5:
                             st.info(
-                                f"📊 **Minimal change** - original was already well-optimized"
+                                f"📊 **Small improvement:** {improvement:+.1f}% CTR increase"
+                            )
+                        elif improvement > -0.5:
+                            st.info(
+                                f"✅ **Well-optimized** - original headline performs well ({improvement:+.1f}%)"
                             )
                         else:
                             st.warning(
-                                f"⚠️ **Consider alternative approach:** {improvement:.1f}% change"
+                                f"⚠️ **Consider revising:** {improvement:.1f}% change detected"
                             )
 
                         # Personalized tips - only show if there's meaningful room for improvement
@@ -1134,7 +1164,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 # import os
 # import torch
 
