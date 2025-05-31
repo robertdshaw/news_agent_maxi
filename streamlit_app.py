@@ -540,8 +540,16 @@ def main():
         """
     <div class="main-header">
         <div class="header-content" style="display: flex; align-items: center; justify-content: center; gap: 25px; margin-bottom: 0.5rem;">
-            <img class="header-logo" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8IS0tIE9yYW5nZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iMTUiIHkxPSIxNSIgeDI9IjQ1IiB5Mj0iNDUiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMjAiIHkxPSIxMCIgeDI9IjUwIiB5Mj0iNDAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iMTAiIHkxPSIyMCIgeDI9IjQwIiB5Mj0iNTAiIHN0cm9rZT0iI0ZGNjEzMyIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8IS0tIFB1cnBsZSBsaW5lcyAtLT4KICA8bGluZSB4MT0iNDUiIHkxPSIxNSIgeDI9IjE1IiB5Mj0iNDUiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNTAiIHkxPSIyMCIgeDI9IjIwIiB5Mj0iNTAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8bGluZSB4MT0iNDAiIHkxPSIxMCIgeDI9IjEwIiB5Mj0iNDAiIHN0cm9rZT0iIzU1MzNBQSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz>
-                 style="width: 80px; height: 80px;" alt="Logo">
+            <svg class="header-logo" width="80" height="80" viewBox="0 0 600 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Orange lines -->
+                <line x1="150" y1="150" x2="450" y2="450" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
+                <line x1="200" y1="100" x2="500" y2="400" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
+                <line x1="100" y1="200" x2="400" y2="500" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
+                <!-- Purple lines -->
+                <line x1="450" y1="150" x2="150" y2="450" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
+                <line x1="500" y1="200" x2="200" y2="500" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
+                <line x1="400" y1="100" x2="100" y2="400" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
+            </svg>
             <div style="text-align: center;">
                 <h1 class="header-title" style="margin: 0; color: white; font-size: 3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em;">Headline Hunter</h1>
                 <div class="header-tagline" style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-top: 0.3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 400;">AI-powered headline optimization that drives engagement</div>
@@ -945,7 +953,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
     main()
 # import os
 # import torch
