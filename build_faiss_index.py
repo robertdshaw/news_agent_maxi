@@ -106,7 +106,17 @@ print(
     f"\nStep 3: Analyzing headline rewrites with LLM ({CONFIG['rewrite_sample_size']} samples)..."
 )
 
-rewriter = EnhancedLLMHeadlineRewriter()
+# Create model pipeline and components for the rewriter
+model_pipeline = {
+    "model": trained_model,
+    "baseline_metrics": {"overall_avg_ctr": training_median_ctr},
+}
+
+components = {"feature_order": feature_order, "category_encoder": category_encoder}
+
+rewriter = EnhancedLLMHeadlineRewriter(
+    model_pipeline=model_pipeline, components=components
+)
 
 # Select low-performing headlines for rewriting analysis
 low_performing_headlines = train_metadata[

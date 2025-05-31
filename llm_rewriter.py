@@ -974,11 +974,6 @@ Return ONLY the 4 headlines, one per line, no numbering."""
         logging.info(f"Performance report exported to {filename}")
         return filename
 
-    # Backward compatibility alias
-
-
-EfficientLLMHeadlineRewriter = EnhancedLLMHeadlineRewriter
-
 
 # import os
 # import re
