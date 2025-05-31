@@ -546,7 +546,6 @@ def main():
 
     # Add this to your admin code section, right after checking the password:
 
-    # Admin panel in sidebar - completely hidden unless you have the password
     admin_key = os.getenv("ADMIN_PASSWORD")
 
     if admin_key:
@@ -556,6 +555,7 @@ def main():
         )
 
         if entered_password == admin_key:
+            # Show admin panel - sidebar is visible
             st.sidebar.markdown("---")
             st.sidebar.markdown("👤 **Admin Panel**")
 
@@ -582,37 +582,23 @@ def main():
                     file_name=f"analytics_{datetime.date.today()}.txt",
                     mime="text/plain",
                 )
-        else:
-            # Wrong password or no password entered - hide entire sidebar
-            st.markdown(
-                """
-            <style>
-            .css-1d391kg {display: none !important;}
-            section[data-testid="stSidebar"] {display: none !important;}
-            .css-1lcbmhc {display: none !important;}
-            </style>
-            """,
-                unsafe_allow_html=True,
-            )
+        # No else clause - let sidebar show with just password field
     else:
-        # No admin password set - completely hide sidebar
+        # No admin password set - hide sidebar completely
         st.markdown(
             """
         <style>
-        .css-1d391kg {display: none !important;}
         section[data-testid="stSidebar"] {display: none !important;}
-        .css-1lcbmhc {display: none !important;}
         </style>
         """,
             unsafe_allow_html=True,
         )
-
-    # Mode selector
-    mode = st.radio(
-        "Choose optimization mode:",
-        ["🎯 Single Headline", "📊 Batch Upload", "⚖️ Comparison Mode"],
-        horizontal=True,
-    )
+        # Mode selector
+        mode = st.radio(
+            "Choose optimization mode:",
+            ["🎯 Single Headline", "📊 Batch Upload", "⚖️ Comparison Mode"],
+            horizontal=True,
+        )
 
     if mode == "🎯 Single Headline":
         # Single headline optimization
