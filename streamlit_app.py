@@ -873,11 +873,119 @@ def main():
             num_headlines = st.slider("Number of headlines to compare:", 2, 5, 3)
 
         with col2:
-            # Category selection in a column for better mobile UX
-            category = st.selectbox(
-                "Category:",
-                ["news", "sports", "finance", "travel", "lifestyle", "health"],
-                help="Category will be applied to all headlines",
+            # Enhanced category selection with beautiful UI
+            st.markdown(
+                """
+            <style>
+            .category-container {
+                margin: 5px 0 15px 0;
+            }
+            
+            .category-container .stButton > button {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white !important;
+                border: none;
+                border-radius: 10px;
+                padding: 6px 12px;
+                font-weight: 500;
+                font-size: 12px;
+                transition: all 0.3s ease;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                width: 100%;
+                height: 38px;
+                margin: 2px 0;
+            }
+            
+            .category-container .stButton > button:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+                background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+            }
+            
+            .category-container .stButton > button:focus:not(:active) {
+                background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+                box-shadow: 0 3px 8px rgba(255,107,107,0.3);
+                border: 2px solid #ff6b6b;
+            }
+            
+            .category-selected {
+                background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+                border-left: 3px solid #667eea;
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin: 8px 0;
+                font-size: 13px;
+                font-weight: 500;
+                text-align: center;
+            }
+            
+            @media (max-width: 768px) {
+                .category-container .stButton > button {
+                    font-size: 11px;
+                    height: 35px;
+                    padding: 5px 8px;
+                }
+                .category-selected {
+                    font-size: 12px;
+                    padding: 6px 10px;
+                }
+            }
+            </style>
+            """,
+                unsafe_allow_html=True,
+            )
+
+            st.markdown("**Category:**")
+            st.markdown('<div class="category-container">', unsafe_allow_html=True)
+
+            # Initialize session state for category if not exists
+            if "selected_category" not in st.session_state:
+                st.session_state.selected_category = "news"
+
+            # Category options with emojis
+            category_options = {
+                "news": "📰 News",
+                "sports": "⚽ Sports",
+                "finance": "💰 Finance",
+                "travel": "✈️ Travel",
+                "lifestyle": "🌟 Lifestyle",
+                "health": "🏥 Health",
+            }
+
+            # Create 2 rows of 3 columns for mobile-friendly layout
+            row1_cols = st.columns(3)
+            row2_cols = st.columns(3)
+
+            categories = ["news", "sports", "finance", "travel", "lifestyle", "health"]
+
+            for i, cat in enumerate(categories):
+                if i < 3:
+                    col = row1_cols[i]
+                else:
+                    col = row2_cols[i - 3]
+
+                with col:
+                    if st.button(
+                        category_options[cat],
+                        key=f"cat_btn_{cat}",
+                        help=f"Select {cat} category - will be applied to all headlines",
+                        use_container_width=True,
+                    ):
+                        st.session_state.selected_category = cat
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Set the category variable (this replaces your selectbox output)
+            category = st.session_state.selected_category
+
+            # Show current selection with nice styling
+            st.markdown(
+                f"""
+            <div class="category-selected">
+                ✅ Selected: <strong>{category_options[category]}</strong>
+            </div>
+            """,
+                unsafe_allow_html=True,
             )
 
         st.markdown("### Enter Headlines to Compare")
