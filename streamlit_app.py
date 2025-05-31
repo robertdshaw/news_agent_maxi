@@ -1008,16 +1008,11 @@ def main():
         st.subheader("⚖️ Compare Headlines Side-by-Side")
         st.write("Test multiple headline variations against each other")
 
-        # Better UX layout for both desktop and mobile
-        col1, col2 = st.columns([2, 1])
+        # Input multiple headlines first
+        num_headlines = st.slider("Number of headlines to compare:", 2, 5, 3)
 
-        with col1:
-            # Input multiple headlines
-            num_headlines = st.slider("Number of headlines to compare:", 2, 5, 3)
-
-        with col2:
-            # Category selection using the category selector
-            category = create_category_selector("comparison")
+        # Category selection using the category selector
+        category = create_category_selector("comparison")
 
         st.markdown("### Enter Headlines to Compare")
 
@@ -1036,11 +1031,15 @@ def main():
                 headline = st.text_area(
                     f"Headline {i+1}:",
                     placeholder=f"Enter headline {i+1}...",
-                    key=f"headline_{i}",
+                    key=f"comparison_headline_{i}",  # Changed key to avoid conflicts
                     height=80,
                 )
                 if headline.strip():
                     headlines.append(headline)
+
+        # Show how many headlines are entered
+        if headlines:
+            st.info(f"📝 {len(headlines)} headlines entered and ready to compare")
 
         if st.button("📊 Compare Headlines", type="primary") and len(headlines) >= 2:
             if model_pipeline and preprocessing_components:
@@ -1079,31 +1078,51 @@ def main():
                                 }
                             )
 
-                    # Sort by CTR score
-                    comparison_results.sort(key=lambda x: x["Score"], reverse=True)
+                    if comparison_results:
+                        # Sort by CTR score
+                        comparison_results.sort(key=lambda x: x["Score"], reverse=True)
 
-                    # Display results
-                    st.subheader("🏆 Comparison Results")
+                        # Display results
+                        st.subheader("🏆 Comparison Results")
 
-                    for i, result in enumerate(comparison_results):
-                        if i == 0:
-                            st.success(
-                                f"🥇 **Winner:** {result['Headline']} - {result['CTR']}"
-                            )
-                        elif i == 1:
-                            st.info(
-                                f"🥈 **Runner-up:** {result['Headline']} - {result['CTR']}"
-                            )
-                        else:
-                            st.write(f"{i+1}. {result['Headline']} - {result['CTR']}")
+                        for i, result in enumerate(comparison_results):
+                            if i == 0:
+                                st.success(
+                                    f"🥇 **Winner:** {result['Headline']} - {result['CTR']}"
+                                )
+                            elif i == 1:
+                                st.info(
+                                    f"🥈 **Runner-up:** {result['Headline']} - {result['CTR']}"
+                                )
+                            else:
+                                st.write(
+                                    f"{i+1}. {result['Headline']} - {result['CTR']}"
+                                )
 
-                    # Detailed comparison table
-                    comparison_df = pd.DataFrame(comparison_results)[
-                        ["Headline", "CTR", "Engagement"]
-                    ]
-                    st.dataframe(comparison_df, use_container_width=True)
+                        # Detailed comparison table
+                        comparison_df = pd.DataFrame(comparison_results)[
+                            ["Headline", "CTR", "Engagement"]
+                        ]
+                        st.dataframe(comparison_df, use_container_width=True)
+
+                        # Download comparison results
+                        csv_comparison = comparison_df.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download Comparison Results",
+                            data=csv_comparison,
+                            file_name=f"headline_comparison_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                        )
+                    else:
+                        st.error(
+                            "❌ Failed to analyze headlines. Please check your inputs and try again."
+                        )
             else:
                 st.error("❌ Required systems not loaded. Please refresh the page.")
+        elif len(headlines) < 2 and len(headlines) > 0:
+            st.warning("⚠️ Please enter at least 2 headlines to compare.")
+        elif len(headlines) == 0:
+            st.info("📝 Enter your headlines above to start comparing.")
 
     # Footer
     st.markdown("---")
