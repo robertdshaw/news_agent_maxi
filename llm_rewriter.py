@@ -5,6 +5,11 @@ import numpy as np
 import logging
 from openai import OpenAI
 from feature_utils import create_article_features_exact, load_preprocessing_components
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 
 class EnhancedLLMHeadlineRewriter:
@@ -23,7 +28,7 @@ class EnhancedLLMHeadlineRewriter:
         if llm_client is not None:
             self.client = llm_client
         else:
-            self.client = OpenAI()
+            self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
         # Load EDA insights if available
         self.eda_insights = self._load_eda_insights(eda_insights_path)
