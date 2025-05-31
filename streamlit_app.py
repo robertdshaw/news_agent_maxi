@@ -492,6 +492,7 @@ def process_batch_headlines(uploaded_file, llm_rewriter, model_pipeline, compone
 
 
 def main():
+
     # Header with logo - try to load your logo first, fallback to placeholder
     logo_path = Path("NEXUS_MARK_cmyk_page-0001-remove-background.com.png")
 
@@ -543,31 +544,41 @@ def main():
         preprocessing_components = load_preprocessing_components()
         llm_rewriter = load_llm_rewriter()
 
-    # Admin panel in sidebar
-    st.sidebar.markdown("---")
-    # AFTER: Two modes - development (easy access) and production (hidden)
-    if os.getenv("STREAMLIT_ENV") == "development":
-        # Easy access for you with checkbox
-        if st.sidebar.checkbox("Show Analytics"):
-            logs = get_usage_stats()
-            st.sidebar.success("✅ Admin Mode Activated")
-
-        # Metrics
-        st.sidebar.metric("Total Interactions", len(logs))
-        st.sidebar.metric(
-            "Headlines Optimized",
-            len([l for l in logs if l["event"] == "headline_rewrite"]),
+    # Admin panel in sidebar - hidden unless you have the password
+    admin_key = os.getenv("ADMIN_PASSWORD")
+    if admin_key:
+        # Only show password field if ADMIN_PASSWORD is set
+        entered_password = st.sidebar.text_input(
+            "🔐 Admin", type="password", key="admin_auth", help="Enter admin password"
         )
 
-        # Download button
-        if logs:
-            log_data = "\n".join([json.dumps(log) for log in logs])
-            st.sidebar.download_button(
-                label="📥 Download Analytics",
-                data=log_data,
-                file_name=f"analytics_{datetime.date.today()}.txt",
-                mime="text/plain",
+        if entered_password == admin_key:
+            st.sidebar.markdown("---")
+            st.sidebar.markdown("👤 **Admin Panel**")
+
+            logs = get_usage_stats()
+            st.sidebar.success(f"✅ {len(logs)} interactions logged")
+
+            # Metrics
+            st.sidebar.metric("Total Interactions", len(logs))
+            st.sidebar.metric(
+                "Headlines Optimized",
+                len([l for l in logs if l["event"] == "headline_optimization"]),
             )
+            st.sidebar.metric(
+                "Batch Uploads",
+                len([l for l in logs if l["event"] == "batch_optimization"]),
+            )
+
+            # Download button
+            if logs:
+                log_data = "\n".join([json.dumps(log) for log in logs])
+                st.sidebar.download_button(
+                    label="📥 Download Analytics",
+                    data=log_data,
+                    file_name=f"analytics_{datetime.date.today()}.txt",
+                    mime="text/plain",
+                )
 
     # Mode selector
     mode = st.radio(
@@ -605,10 +616,10 @@ def main():
                 "tv",
                 "music",
                 "movies",
-                "kids",
-                "northamerica",
-                "middleeast",
-                "unknown",
+                # "kids",
+                # "northamerica",
+                # "middleeast",
+                # "unknown",
             ]
 
             category = st.selectbox("Category:", categories, index=0)
