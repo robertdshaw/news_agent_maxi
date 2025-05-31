@@ -79,7 +79,7 @@ st.write("  • Exists on disk? ", logo_path.exists())
 
 if logo_path.exists():
     st.write("✅ Found the logo file — rendering it below:")
-    st.image(str(logo_path), caption="Headline Hunter Logo", use_column_width=True)
+    st.image(str(logo_path), caption="Headline Hunter Logo", use_container_width=True)
 else:
     st.error("❌ Logo file not found. Make sure the filename and location are correct.")
     # (fallback below, if you still want an inline SVG header)
@@ -577,7 +577,7 @@ def main():
             # Use st.image or base64 encode it
             with open(logo_path, "rb") as f:
                 logo_data = f.read()
-                st.image(logo_data, caption="Logo", use_column_width=True)
+                st.image(logo_data, caption="Logo", use_container_width=True)
     except:
         # Use fallback
         st.markdown(
