@@ -1,0 +1,10 @@
+{"timestamp": "2025-05-31T17:54:00.056458", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
+{"timestamp": "2025-05-31T17:58:12.585857", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
+{"timestamp": "2025-05-31T19:02:18.531279", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
+{"timestamp": "2025-05-31T19:04:49.360179", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
+{"timestamp": "2025-05-31T19:11:56.405421", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
+{"timestamp": "2025-05-31T19:13:10.550522", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
+{"timestamp": "2025-05-31T19:13:20.435315", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
+{"timestamp": "2025-05-31T19:13:20.646352", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
+{"timestamp": "2025-05-31T19:13:20.666154", "event": "headline_optimization", "data": {"headline": "Hamas pledges to free 10 living hostages but seeks permanent ceasefire in response to US plan\n", "category": "news", "mode": "single"}}
+{"timestamp": "2025-05-31T20:19:43.448975", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
