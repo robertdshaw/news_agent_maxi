@@ -64,39 +64,6 @@ st.set_page_config(
 # Add this to track page visits
 log_event("page_visit", {"user_agent": "streamlit_user"})
 
-
-from pathlib import Path
-import streamlit as st
-
-# Build a path that’s guaranteed to live in the same folder as this Python file:
-THIS_DIR = Path(__file__).parent
-LOGO_FILENAME = "NEXUS_MARK_cmyk_page-0001-remove-background.com.png"
-logo_path = THIS_DIR / LOGO_FILENAME
-
-# # DEBUG: tell us exactly where Python is looking (will show up on the Streamlit page)
-# st.write("🔎 Looking for logo at:", logo_path.resolve())
-# st.write("  • Exists on disk? ", logo_path.exists())
-
-# if logo_path.exists():
-#     st.write("✅ Found the logo file — rendering it below:")
-#     st.image(str(logo_path), caption="Headline Hunter Logo", use_container_width=True)
-# else:
-#     st.error("❌ Logo file not found. Make sure the filename and location are correct.")
-#     # (fallback below, if you still want an inline SVG header)
-#     st.markdown(
-#         """
-#         <div class="main-header">
-#             <!-- INLINE SVG HEADER HERE AS FALLBACK -->
-#             <svg class="header-logo" ...> … </svg>
-#             <div style="text-align: center;">
-#               <h1 class="header-title">Headline Hunter</h1>
-#               <div class="header-tagline">AI-powered headline optimization</div>
-#             </div>
-#         </div>
-#         """,
-#         unsafe_allow_html=True,
-#     )
-
 # Constants
 MODEL_DIR = Path("model_output")
 FAISS_DIR = Path("faiss_index")
@@ -136,31 +103,6 @@ st.markdown(
         .header-tagline {
           font-size: 0.9rem !important;
           margin-top: 0.5rem !important;
-        }
-      }
-      
-      /* Mobile-responsive tips */
-      .quick-tips {
-        background-color: #e7f3ff;
-        border: 2px solid #0066cc;
-        border-radius: 10px;
-        padding: 15px;
-        margin: 15px 0;
-      }
-      
-      @media (max-width: 768px) {
-        .quick-tips {
-          padding: 12px;
-          margin: 10px 0;
-        }
-        .tips-title {
-          font-size: 16px !important;
-          margin-bottom: 10px !important;
-        }
-        .tip-item {
-          font-size: 14px !important;
-          margin: 6px 0 !important;
-          padding-left: 25px !important;
         }
       }
       
@@ -208,26 +150,6 @@ st.markdown(
           margin: 0.4rem 0;
           font-size: 14px;
         }
-      }
-      
-      .tips-title {
-        font-weight: bold;
-        font-size: 18px;
-        margin-bottom: 15px;
-        color: #0066cc;
-      }
-      .tip-item {
-        margin: 8px 0;
-        color: #333;
-        padding-left: 20px;
-        position: relative;
-        font-size: 15px;
-        line-height: 1.4;
-      }
-      .tip-item:before {
-        content: "💡";
-        position: absolute;
-        left: 0;
       }
       
       .comparison-container {
@@ -568,32 +490,41 @@ def process_batch_headlines(uploaded_file, llm_rewriter, model_pipeline, compone
 
 
 def main():
-    # Header with custom logo - Mobile optimized
+    # Header with logo - try to load your logo first, fallback to placeholder
+    logo_path = Path("NEXUS_MARK_cmyk_page-0001-remove-background.com.png")
 
-    # At the top of your main() function:
-    try:
-        logo_path = "NEXUS_MARK_cmyk_page-0001-remove-background.com.png"
-        if Path(logo_path).exists():
-            # Use st.image or base64 encode it
-            with open(logo_path, "rb") as f:
-                logo_data = f.read()
-                st.image(logo_data, caption="Logo", use_container_width=True)
-    except:
-        # Use fallback
+    if logo_path.exists():
+        # Display your actual logo with proper header
         st.markdown(
             """
         <div class="main-header">
             <div class="header-content" style="display: flex; align-items: center; justify-content: center; gap: 25px; margin-bottom: 0.5rem;">
-                <svg class="header-logo" width="80" height="80" viewBox="0 0 600 600" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Orange lines -->
-                    <line x1="150" y1="150" x2="450" y2="450" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
-                    <line x1="200" y1="100" x2="500" y2="400" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
-                    <line x1="100" y1="200" x2="400" y2="500" stroke="#FF6133" stroke-width="40" stroke-linecap="round"/>
-                    <!-- Purple lines -->
-                    <line x1="450" y1="150" x2="150" y2="450" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
-                    <line x1="500" y1="200" x2="200" y2="500" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
-                    <line x1="400" y1="100" x2="100" y2="400" stroke="#5533AA" stroke-width="40" stroke-linecap="round"/>
-                </svg>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        # Display logo using Streamlit's image function
+        col_logo, col_title = st.columns([1, 4])
+        with col_logo:
+            st.image(str(logo_path), width=80)
+
+        with col_title:
+            st.markdown(
+                """
+                <h1 class="header-title" style="margin: 0; color: white; font-size: 3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em;">Headline Hunter</h1>
+                <div class="header-tagline" style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-top: 0.3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 400;">AI-powered headline optimization that drives engagement</div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("</div></div>", unsafe_allow_html=True)
+    else:
+        # Fallback header with placeholder
+        st.markdown(
+            """
+        <div class="main-header">
+            <div class="header-content" style="display: flex; align-items: center; justify-content: center; gap: 25px; margin-bottom: 0.5rem;">
+                <div class="header-logo" style="width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.2); border-radius: 12px; font-size: 2rem; color: white; font-weight: bold;">HL</div>
                 <div style="text-align: center;">
                     <h1 class="header-title" style="margin: 0; color: white; font-size: 3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em;">Headline Hunter</h1>
                     <div class="header-tagline" style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-top: 0.3rem; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 400;">AI-powered headline optimization that drives engagement</div>
@@ -679,18 +610,16 @@ def main():
             optimize_btn = st.button("🚀 Optimize Headline", type="primary")
 
         with col2:
+            # Simplified How to Use guide
+            st.markdown("### 🚀 How to Use")
             st.markdown(
                 """
-            <div class="quick-tips">
-                <div class="tips-title">🚀 How to Use</div>
-                <div class="tip-item">Enter your headline in the text box</div>
-                <div class="tip-item">Select the appropriate category</div>
-                <div class="tip-item">Click "Optimize Headline" to see results</div>
-                <div class="tip-item">Compare original vs optimized performance</div>
-                <div class="tip-item">Try batch mode for multiple headlines</div>
-            </div>
-            """,
-                unsafe_allow_html=True,
+            1. **Enter your headline** in the text box
+            2. **Select the category** from the dropdown  
+            3. **Click "Optimize Headline"** to see AI suggestions
+            4. **Compare** original vs optimized performance
+            5. **Try batch mode** for multiple headlines at once
+            """
             )
 
         if optimize_btn and title.strip():
