@@ -544,19 +544,43 @@ def main():
         preprocessing_components = load_preprocessing_components()
         llm_rewriter = load_llm_rewriter()
 
-    # Admin panel in sidebar - hidden unless you have the password
+    # Admin panel - completely hidden until correct password
     admin_key = os.getenv("ADMIN_PASSWORD")
+    show_admin = False
 
     if admin_key:
-        # Only show password field if ADMIN_PASSWORD is set
-        entered_password = st.sidebar.text_input(
-            "🔐 Admin", type="password", key="admin_auth", help="Enter admin password"
-        )
+        # Check if correct password was entered (using session state)
+        if "admin_authenticated" not in st.session_state:
+            st.session_state.admin_authenticated = False
 
-        if entered_password == admin_key:
-            # Show admin panel - sidebar is visible
-            st.sidebar.markdown("---")
+        # Only show password field in main area if not authenticated
+        if not st.session_state.admin_authenticated:
+            # Hide sidebar completely for public users
+            st.markdown(
+                """
+            <style>
+            section[data-testid="stSidebar"] {display: none !important;}
+            </style>
+            """,
+                unsafe_allow_html=True,
+            )
+
+            # Show password input in main area (discrete)
+            with st.expander("🔐 Admin Access", expanded=False):
+                entered_password = st.text_input(
+                    "Password:", type="password", key="admin_main"
+                )
+                if st.button("Login") and entered_password == admin_key:
+                    st.session_state.admin_authenticated = True
+                    st.rerun()
+        else:
+            # Authenticated - show admin in sidebar
             st.sidebar.markdown("👤 **Admin Panel**")
+
+            # Logout button
+            if st.sidebar.button("🚪 Logout"):
+                st.session_state.admin_authenticated = False
+                st.rerun()
 
             logs = get_usage_stats()
             st.sidebar.success(f"✅ {len(logs)} interactions logged")
@@ -581,7 +605,6 @@ def main():
                     file_name=f"analytics_{datetime.date.today()}.txt",
                     mime="text/plain",
                 )
-        # No else clause - let sidebar show with just password field
     else:
         # No admin password set - hide sidebar completely
         st.markdown(
