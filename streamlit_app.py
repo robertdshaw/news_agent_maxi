@@ -62,7 +62,9 @@ st.set_page_config(
 )
 
 # Add this to track page visits
-log_event("page_visit", {"user_agent": "streamlit_user"})
+# AFTER: Only logs when YOU set development mode
+if os.getenv("STREAMLIT_ENV") == "development":
+    log_event("page_visit", {"user_agent": "streamlit_user"})
 
 # Constants
 MODEL_DIR = Path("model_output")
@@ -543,9 +545,12 @@ def main():
 
     # Admin panel in sidebar
     st.sidebar.markdown("---")
-    if st.sidebar.text_input("📊 Analytics (Enter: admin)", type="password") == "admin":
-        logs = get_usage_stats()
-        st.sidebar.success("✅ Admin Mode Activated")
+    # AFTER: Two modes - development (easy access) and production (hidden)
+    if os.getenv("STREAMLIT_ENV") == "development":
+        # Easy access for you with checkbox
+        if st.sidebar.checkbox("Show Analytics"):
+            logs = get_usage_stats()
+            st.sidebar.success("✅ Admin Mode Activated")
 
         # Metrics
         st.sidebar.metric("Total Interactions", len(logs))
