@@ -26,8 +26,42 @@ import io
 
 warnings.filterwarnings("ignore")
 
+# Constants
+USER_CATEGORIES = [
+    "news",
+    "sports",
+    "business",
+    "technology",
+    "health",
+    "lifestyle",
+    "entertainment",
+    "travel",
+    "food",
+    "science",
+    "politics",
+    "culture",
+]
 
-# Add this logging function at the top, after your imports
+CATEGORY_OPTIONS = {
+    "news": "📰 Breaking News",
+    "sports": "⚽ Sports",
+    "business": "💼 Business",
+    "technology": "💻 Technology",
+    "health": "🏥 Health & Wellness",
+    "lifestyle": "🌟 Lifestyle",
+    "entertainment": "🎬 Entertainment",
+    "travel": "✈️ Travel",
+    "food": "🍕 Food & Dining",
+    "science": "🔬 Science",
+    "politics": "🏛️ Politics",
+    "culture": "🎨 Arts & Culture",
+}
+
+MODEL_DIR = Path("model_output")
+FAISS_DIR = Path("faiss_index")
+PREP_DIR = Path("data/preprocessed")
+
+
 def log_event(event_type, data):
     """Log events to track user behavior"""
     log_entry = {
@@ -53,185 +87,120 @@ def get_usage_stats():
         return []
 
 
-# Page configuration
-st.set_page_config(
-    page_title="Headline Hunter",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+def map_user_category_to_model(user_category):
+    """Map user-friendly categories to model training categories"""
+    category_mapping = {
+        "news": "news",
+        "sports": "sports",
+        "business": "finance",
+        "technology": "news",
+        "health": "health",
+        "lifestyle": "lifestyle",
+        "entertainment": "entertainment",
+        "travel": "travel",
+        "food": "foodanddrink",
+        "science": "news",
+        "politics": "news",
+        "culture": "entertainment",
+    }
+    return category_mapping.get(user_category, "news")
 
-# Add this to track page visits
-# AFTER: Only logs when YOU set development mode
-if os.getenv("STREAMLIT_ENV") == "development":
-    log_event("page_visit", {"user_agent": "streamlit_user"})
 
-# Constants
-MODEL_DIR = Path("model_output")
-FAISS_DIR = Path("faiss_index")
-PREP_DIR = Path("data/preprocessed")
-
-# Enhanced CSS Styles with Mobile Optimization
-st.markdown(
-    """
+def create_category_selector(key_prefix=""):
+    """Reusable category selector for all modes"""
+    st.markdown(
+        """
     <style>
-      .main-header {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
+    .category-container {
+        margin: 5px 0 15px 0;
+    }
+    
+    .category-container .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white !important;
+        border: none;
         border-radius: 10px;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
-      }
-      
-      /* Mobile-responsive header */
-      @media (max-width: 768px) {
-        .main-header {
-          padding: 1rem;
-          margin-bottom: 1rem;
+        padding: 6px 12px;
+        font-weight: 500;
+        font-size: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        width: 100%;
+        height: 38px;
+        margin: 2px 0;
+    }
+    
+    .category-container .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+        background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+    }
+    
+    .category-container .stButton > button:focus:not(:active) {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        box-shadow: 0 3px 8px rgba(255,107,107,0.3);
+        border: 2px solid #ff6b6b;
+    }
+    
+    @media (max-width: 768px) {
+        .category-container .stButton > button {
+            font-size: 11px;
+            height: 35px;
         }
-        .header-content {
-          flex-direction: column !important;
-          gap: 15px !important;
-        }
-        .header-logo {
-          width: 60px !important;
-          height: 60px !important;
-        }
-        .header-title {
-          font-size: 2rem !important;
-          line-height: 1.2 !important;
-        }
-        .header-tagline {
-          font-size: 0.9rem !important;
-          margin-top: 0.5rem !important;
-        }
-      }
-      
-      .metric-card {
-        background-color: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
-        border-left: 4px solid #667eea;
-      }
-      
-      @media (max-width: 768px) {
-        .metric-card {
-          padding: 1rem;
-          margin-bottom: 0.75rem;
-        }
-      }
-      
-      .improvement-positive {
-        background-color: #d4edda;
-        border-left: 4px solid #28a745;
-        padding: 1rem;
-        border-radius: 5px;
-        margin: 0.5rem 0;
-      }
-      .improvement-negative {
-        background-color: #f8d7da;
-        border-left: 4px solid #dc3545;
-        padding: 1rem;
-        border-radius: 5px;
-        margin: 0.5rem 0;
-      }
-      .improvement-neutral {
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 1rem;
-        border-radius: 5px;
-        margin: 0.5rem 0;
-      }
-      
-      @media (max-width: 768px) {
-        .improvement-positive, .improvement-negative, .improvement-neutral {
-          padding: 0.75rem;
-          margin: 0.4rem 0;
-          font-size: 14px;
-        }
-      }
-      
-      .comparison-container {
-        display: flex;
-        gap: 20px;
-        margin: 20px 0;
-      }
-      
-      @media (max-width: 768px) {
-        .comparison-container {
-          flex-direction: column;
-          gap: 15px;
-          margin: 15px 0;
-        }
-      }
-      
-      .comparison-box {
-        flex: 1;
-        padding: 20px;
-        border-radius: 10px;
-        border: 2px solid #ddd;
-      }
-      
-      @media (max-width: 768px) {
-        .comparison-box {
-          padding: 15px;
-        }
-        .comparison-box h4 {
-          font-size: 16px;
-          margin-bottom: 10px;
-        }
-      }
-      
-      .original-box {
-        background-color: #fff5f5;
-        border-color: #fed7d7;
-      }
-      .optimized-box {
-        background-color: #f0fff4;
-        border-color: #9ae6b4;
-      }
-      
-      /* Mobile-responsive mode selector */
-      @media (max-width: 768px) {
-        .stRadio > div {
-          flex-direction: column !important;
-          gap: 10px !important;
-        }
-        .stRadio > div > label {
-          margin-right: 0 !important;
-          margin-bottom: 8px !important;
-        }
-      }
-      
-      /* Mobile text areas and inputs */
-      @media (max-width: 768px) {
-        .stTextArea textarea {
-          font-size: 16px !important; /* Prevents zoom on iOS */
-        }
-        .stTextInput input {
-          font-size: 16px !important; /* Prevents zoom on iOS */
-        }
-        .stSelectbox select {
-          font-size: 16px !important;
-        }
-      }
-      
-      /* Better mobile button spacing */
-      @media (max-width: 768px) {
-        .stButton button {
-          width: 100%;
-          margin: 10px 0;
-          padding: 12px 20px;
-          font-size: 16px;
-        }
-      }
+    }
     </style>
     """,
-    unsafe_allow_html=True,
-)
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("**Category:**")
+    st.markdown('<div class="category-container">', unsafe_allow_html=True)
+
+    # Initialize session state
+    session_key = f"selected_category_{key_prefix}"
+    if session_key not in st.session_state:
+        st.session_state[session_key] = "news"
+
+    # Create 4x3 grid
+    rows = [st.columns(4) for _ in range(3)]
+
+    for i, cat in enumerate(USER_CATEGORIES):
+        row_idx = i // 4
+        col_idx = i % 4
+
+        if row_idx < 3:
+            with rows[row_idx][col_idx]:
+                if st.button(
+                    CATEGORY_OPTIONS[cat],
+                    key=f"cat_btn_{cat}_{key_prefix}",
+                    help=f"Select {cat} category",
+                    use_container_width=True,
+                ):
+                    st.session_state[session_key] = cat
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Show selection
+    selected = st.session_state[session_key]
+    st.markdown(
+        f"""
+    <div style="
+        background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+        border-left: 3px solid #667eea;
+        padding: 8px 12px;
+        border-radius: 6px;
+        margin: 8px 0;
+        font-size: 13px;
+        font-weight: 500;
+        text-align: center;
+    ">
+        ✅ Selected: <strong>{CATEGORY_OPTIONS[selected]}</strong>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    return selected
 
 
 @st.cache_resource
@@ -447,7 +416,7 @@ def process_batch_headlines(uploaded_file, llm_rewriter, model_pipeline, compone
             progress_bar.progress((idx + 1) / len(df))
 
             headline = row["headline"]
-            category = row.get("category", "news")
+            category = map_user_category_to_model(row.get("category", "news"))
 
             # Get original prediction
             original_result = predict_engagement(
@@ -492,6 +461,180 @@ def process_batch_headlines(uploaded_file, llm_rewriter, model_pipeline, compone
 
 
 def main():
+    # Page configuration
+    st.set_page_config(
+        page_title="Headline Hunter",
+        page_icon="⚡",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
+    # Add this to track page visits
+    # AFTER: Only logs when YOU set development mode
+    if os.getenv("STREAMLIT_ENV") == "development":
+        log_event("page_visit", {"user_agent": "streamlit_user"})
+
+    # Enhanced CSS Styles with Mobile Optimization
+    st.markdown(
+        """
+        <style>
+          .main-header {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            padding: 1.5rem;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            margin-bottom: 2rem;
+          }
+          
+          /* Mobile-responsive header */
+          @media (max-width: 768px) {
+            .main-header {
+              padding: 1rem;
+              margin-bottom: 1rem;
+            }
+            .header-content {
+              flex-direction: column !important;
+              gap: 15px !important;
+            }
+            .header-logo {
+              width: 60px !important;
+              height: 60px !important;
+            }
+            .header-title {
+              font-size: 2rem !important;
+              line-height: 1.2 !important;
+            }
+            .header-tagline {
+              font-size: 0.9rem !important;
+              margin-top: 0.5rem !important;
+            }
+          }
+          
+          .metric-card {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+            border-left: 4px solid #667eea;
+          }
+          
+          @media (max-width: 768px) {
+            .metric-card {
+              padding: 1rem;
+              margin-bottom: 0.75rem;
+            }
+          }
+          
+          .improvement-positive {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 0.5rem 0;
+          }
+          .improvement-negative {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 0.5rem 0;
+          }
+          .improvement-neutral {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 0.5rem 0;
+          }
+          
+          @media (max-width: 768px) {
+            .improvement-positive, .improvement-negative, .improvement-neutral {
+              padding: 0.75rem;
+              margin: 0.4rem 0;
+              font-size: 14px;
+            }
+          }
+          
+          .comparison-container {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+          }
+          
+          @media (max-width: 768px) {
+            .comparison-container {
+              flex-direction: column;
+              gap: 15px;
+              margin: 15px 0;
+            }
+          }
+          
+          .comparison-box {
+            flex: 1;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #ddd;
+          }
+          
+          @media (max-width: 768px) {
+            .comparison-box {
+              padding: 15px;
+            }
+            .comparison-box h4 {
+              font-size: 16px;
+              margin-bottom: 10px;
+            }
+          }
+          
+          .original-box {
+            background-color: #fff5f5;
+            border-color: #fed7d7;
+          }
+          .optimized-box {
+            background-color: #f0fff4;
+            border-color: #9ae6b4;
+          }
+          
+          /* Mobile-responsive mode selector */
+          @media (max-width: 768px) {
+            .stRadio > div {
+              flex-direction: column !important;
+              gap: 10px !important;
+            }
+            .stRadio > div > label {
+              margin-right: 0 !important;
+              margin-bottom: 8px !important;
+            }
+          }
+          
+          /* Mobile text areas and inputs */
+          @media (max-width: 768px) {
+            .stTextArea textarea {
+              font-size: 16px !important; /* Prevents zoom on iOS */
+            }
+            .stTextInput input {
+              font-size: 16px !important; /* Prevents zoom on iOS */
+            }
+            .stSelectbox select {
+              font-size: 16px !important;
+            }
+          }
+          
+          /* Better mobile button spacing */
+          @media (max-width: 768px) {
+            .stButton button {
+              width: 100%;
+              margin: 10px 0;
+              padding: 12px 20px;
+              font-size: 16px;
+            }
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Header with logo - try to load your logo first, fallback to placeholder
     logo_path = Path("NEXUS_MARK_cmyk_page-0001-remove-background.com.png")
@@ -624,41 +767,14 @@ def main():
     )
 
     if mode == "🎯 Single Headline":
-        # Single headline optimization
         col1, col2 = st.columns([2, 1])
 
         with col1:
             st.subheader("Optimize Your Headline")
+            title = st.text_area("Headline", placeholder="Enter your headline here...")
 
-            title = st.text_area(
-                "Enter your headline:",
-                placeholder="Local Team Wins Championship Game",
-                height=100,
-                help="Enter the headline you want to optimize",
-            )
-
-            categories = [
-                "news",
-                "sports",
-                "finance",
-                "travel",
-                "lifestyle",
-                "video",
-                "foodanddrink",
-                "weather",
-                "autos",
-                "health",
-                "entertainment",
-                "tv",
-                "music",
-                "movies",
-                # "kids",
-                # "northamerica",
-                # "middleeast",
-                # "unknown",
-            ]
-
-            category = st.selectbox("Category:", categories, index=0)
+            # Use the category selector
+            category = create_category_selector("single")
             optimize_btn = st.button("🚀 Optimize Headline", type="primary")
 
         with col2:
@@ -676,6 +792,9 @@ def main():
 
         if optimize_btn and title.strip():
             if model_pipeline and preprocessing_components and llm_rewriter:
+                # Map user category to model category
+                model_category = map_user_category_to_model(category)
+
                 # Log the event
                 log_event(
                     "headline_optimization",
@@ -685,18 +804,22 @@ def main():
                 with st.spinner("🤖 Optimizing your headline..."):
                     # Get original prediction
                     original_result = predict_engagement(
-                        title, "", category, model_pipeline, preprocessing_components
+                        title,
+                        "",
+                        model_category,
+                        model_pipeline,
+                        preprocessing_components,
                     )
 
                     # Get optimized headline
-                    article_data = {"category": category, "abstract": ""}
+                    article_data = {"category": model_category, "abstract": ""}
                     rewrite_result = llm_rewriter.get_best_headline(title, article_data)
 
                     optimized_headline = rewrite_result.get("best_headline", title)
                     optimized_result = predict_engagement(
                         optimized_headline,
                         "",
-                        category,
+                        model_category,
                         model_pipeline,
                         preprocessing_components,
                     )
@@ -774,39 +897,57 @@ def main():
             "Upload a CSV file with headlines to optimize multiple headlines at once"
         )
 
-        # File upload
-        uploaded_file = st.file_uploader(
-            "Upload CSV file",
-            type=["csv"],
-            help="CSV should contain a 'headline' column. Optional 'category' column.",
-        )
+        # Create sample CSV for download
+        sample_data = {
+            "headline": [
+                "Scientists Discover New Species in Ocean",
+                "Local Restaurant Wins National Award",
+                "Technology Breakthrough Changes Everything",
+            ],
+            "category": ["science", "food", "technology"],
+        }
+        sample_df = pd.DataFrame(sample_data)
 
-        # Download sample template
-        sample_df = pd.DataFrame(
-            {
-                "headline": [
-                    "Local Team Wins Game",
-                    "Stock Market Changes Today",
-                    "New Health Study Released",
-                ],
-                "category": ["sports", "finance", "health"],
-            }
-        )
+        col1, col2 = st.columns([2, 1])
 
-        csv_sample = sample_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Sample CSV Template",
-            data=csv_sample,
-            file_name="headline_template.csv",
-            mime="text/csv",
-        )
+        with col1:
+            # File upload
+            uploaded_file = st.file_uploader(
+                "Upload CSV file",
+                type=["csv"],
+                help="CSV should contain a 'headline' column. Optional 'category' column.",
+            )
 
-        if uploaded_file and llm_rewriter:
-            if st.button("🚀 Optimize All Headlines", type="primary"):
-                # Log batch optimization
-                log_event("batch_optimization", {"filename": uploaded_file.name})
+        with col2:
+            st.markdown("### 📋 Required Format")
+            st.markdown("Your CSV should have these columns:")
+            st.code(
+                """headline,category
+"Your headline here","news"
+"Another headline","sports"
+"""
+            )
 
-                # Process batch
+            # Download sample template
+            csv_sample = sample_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Sample CSV",
+                data=csv_sample,
+                file_name="sample_headlines.csv",
+                mime="text/csv",
+            )
+
+        if uploaded_file is not None:
+            if model_pipeline and preprocessing_components and llm_rewriter:
+                # Log batch optimization event
+                log_event(
+                    "batch_optimization",
+                    {"filename": uploaded_file.name, "mode": "batch"},
+                )
+
+                st.write("Processing your headlines...")
+
+                # Process the batch
                 results_df = process_batch_headlines(
                     uploaded_file,
                     llm_rewriter,
@@ -815,50 +956,52 @@ def main():
                 )
 
                 if results_df is not None:
-                    st.success(f"✅ Optimized {len(results_df)} headlines!")
+                    st.success(
+                        f"✅ Processed {len(results_df)} headlines successfully!"
+                    )
 
-                    # Show summary metrics
+                    # Show summary statistics
                     col1, col2, col3 = st.columns(3)
-                    with col1:
-                        improved_count = sum(
-                            1
-                            for imp in results_df["improvement"]
-                            if float(imp.replace("%", "").replace("+", "")) > 0
-                        )
-                        st.metric(
-                            "Headlines Improved", f"{improved_count}/{len(results_df)}"
-                        )
 
-                    with col2:
-                        avg_improvement = np.mean(
-                            [
-                                float(imp.replace("%", "").replace("+", ""))
-                                for imp in results_df["improvement"]
+                    with col1:
+                        improved_count = len(
+                            results_df[
+                                results_df["improvement"].str.contains(
+                                    r"\+", regex=True
+                                )
                             ]
                         )
+                        st.metric("Headlines Improved", improved_count)
+
+                    with col2:
+                        # Calculate average improvement (convert percentage strings to numbers)
+                        improvements = (
+                            results_df["improvement"]
+                            .str.replace("%", "")
+                            .str.replace("+", "")
+                            .astype(float)
+                        )
+                        avg_improvement = improvements.mean()
                         st.metric("Average Improvement", f"{avg_improvement:+.1f}%")
 
                     with col3:
-                        best_improvement = max(
-                            [
-                                float(imp.replace("%", "").replace("+", ""))
-                                for imp in results_df["improvement"]
-                            ]
-                        )
+                        best_improvement = improvements.max()
                         st.metric("Best Improvement", f"{best_improvement:+.1f}%")
 
-                    # Display results
-                    st.subheader("📋 Optimization Results")
+                    # Display results table
+                    st.subheader("📊 Optimization Results")
                     st.dataframe(results_df, use_container_width=True)
 
                     # Download results
                     csv_results = results_df.to_csv(index=False)
                     st.download_button(
-                        label="📥 Download Optimized Headlines",
+                        label="📥 Download Results",
                         data=csv_results,
                         file_name=f"optimized_headlines_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv",
                     )
+            else:
+                st.error("❌ Required systems not loaded. Please refresh the page.")
 
     elif mode == "⚖️ Comparison Mode":
         # Comparison mode
@@ -873,120 +1016,8 @@ def main():
             num_headlines = st.slider("Number of headlines to compare:", 2, 5, 3)
 
         with col2:
-            # Enhanced category selection with beautiful UI
-            st.markdown(
-                """
-            <style>
-            .category-container {
-                margin: 5px 0 15px 0;
-            }
-            
-            .category-container .stButton > button {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white !important;
-                border: none;
-                border-radius: 10px;
-                padding: 6px 12px;
-                font-weight: 500;
-                font-size: 12px;
-                transition: all 0.3s ease;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                width: 100%;
-                height: 38px;
-                margin: 2px 0;
-            }
-            
-            .category-container .stButton > button:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-                background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-            }
-            
-            .category-container .stButton > button:focus:not(:active) {
-                background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-                box-shadow: 0 3px 8px rgba(255,107,107,0.3);
-                border: 2px solid #ff6b6b;
-            }
-            
-            .category-selected {
-                background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
-                border-left: 3px solid #667eea;
-                padding: 8px 12px;
-                border-radius: 6px;
-                margin: 8px 0;
-                font-size: 13px;
-                font-weight: 500;
-                text-align: center;
-            }
-            
-            @media (max-width: 768px) {
-                .category-container .stButton > button {
-                    font-size: 11px;
-                    height: 35px;
-                    padding: 5px 8px;
-                }
-                .category-selected {
-                    font-size: 12px;
-                    padding: 6px 10px;
-                }
-            }
-            </style>
-            """,
-                unsafe_allow_html=True,
-            )
-
-            st.markdown("**Category:**")
-            st.markdown('<div class="category-container">', unsafe_allow_html=True)
-
-            # Initialize session state for category if not exists
-            if "selected_category" not in st.session_state:
-                st.session_state.selected_category = "news"
-
-            # Category options with emojis
-            category_options = {
-                "news": "📰 News",
-                "sports": "⚽ Sports",
-                "finance": "💰 Finance",
-                "travel": "✈️ Travel",
-                "lifestyle": "🌟 Lifestyle",
-                "health": "🏥 Health",
-            }
-
-            # Create 2 rows of 3 columns for mobile-friendly layout
-            row1_cols = st.columns(3)
-            row2_cols = st.columns(3)
-
-            categories = ["news", "sports", "finance", "travel", "lifestyle", "health"]
-
-            for i, cat in enumerate(categories):
-                if i < 3:
-                    col = row1_cols[i]
-                else:
-                    col = row2_cols[i - 3]
-
-                with col:
-                    if st.button(
-                        category_options[cat],
-                        key=f"cat_btn_{cat}",
-                        help=f"Select {cat} category - will be applied to all headlines",
-                        use_container_width=True,
-                    ):
-                        st.session_state.selected_category = cat
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            # Set the category variable (this replaces your selectbox output)
-            category = st.session_state.selected_category
-
-            # Show current selection with nice styling
-            st.markdown(
-                f"""
-            <div class="category-selected">
-                ✅ Selected: <strong>{category_options[category]}</strong>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
+            # Category selection using the category selector
+            category = create_category_selector("comparison")
 
         st.markdown("### Enter Headlines to Compare")
 
@@ -1012,55 +1043,67 @@ def main():
                     headlines.append(headline)
 
         if st.button("📊 Compare Headlines", type="primary") and len(headlines) >= 2:
-            # Log comparison
-            log_event(
-                "headline_comparison",
-                {"headlines_count": len(headlines), "category": category},
-            )
+            if model_pipeline and preprocessing_components:
+                # Log comparison
+                log_event(
+                    "headline_comparison",
+                    {"headlines_count": len(headlines), "category": category},
+                )
 
-            with st.spinner("Analyzing headlines..."):
-                comparison_results = []
+                # Map user category to model category
+                model_category = map_user_category_to_model(category)
 
-                for i, headline in enumerate(headlines):
-                    result = predict_engagement(
-                        headline, "", category, model_pipeline, preprocessing_components
-                    )
+                with st.spinner("Analyzing headlines..."):
+                    comparison_results = []
 
-                    if result:
-                        comparison_results.append(
-                            {
-                                "Headline": headline,
-                                "CTR": f"{result['estimated_ctr']*100:.2f}%",
-                                "Engagement": (
-                                    "🔥 High" if result["high_engagement"] else "📉 Low"
-                                ),
-                                "Score": result["estimated_ctr"],
-                            }
+                    for i, headline in enumerate(headlines):
+                        result = predict_engagement(
+                            headline,
+                            "",
+                            model_category,
+                            model_pipeline,
+                            preprocessing_components,
                         )
 
-                # Sort by CTR score
-                comparison_results.sort(key=lambda x: x["Score"], reverse=True)
+                        if result:
+                            comparison_results.append(
+                                {
+                                    "Headline": headline,
+                                    "CTR": f"{result['estimated_ctr']*100:.2f}%",
+                                    "Engagement": (
+                                        "🔥 High"
+                                        if result["high_engagement"]
+                                        else "📉 Low"
+                                    ),
+                                    "Score": result["estimated_ctr"],
+                                }
+                            )
 
-                # Display results
-                st.subheader("🏆 Comparison Results")
+                    # Sort by CTR score
+                    comparison_results.sort(key=lambda x: x["Score"], reverse=True)
 
-                for i, result in enumerate(comparison_results):
-                    if i == 0:
-                        st.success(
-                            f"🥇 **Winner:** {result['Headline']} - {result['CTR']}"
-                        )
-                    elif i == 1:
-                        st.info(
-                            f"🥈 **Runner-up:** {result['Headline']} - {result['CTR']}"
-                        )
-                    else:
-                        st.write(f"{i+1}. {result['Headline']} - {result['CTR']}")
+                    # Display results
+                    st.subheader("🏆 Comparison Results")
 
-                # Detailed comparison table
-                comparison_df = pd.DataFrame(comparison_results)[
-                    ["Headline", "CTR", "Engagement"]
-                ]
-                st.dataframe(comparison_df, use_container_width=True)
+                    for i, result in enumerate(comparison_results):
+                        if i == 0:
+                            st.success(
+                                f"🥇 **Winner:** {result['Headline']} - {result['CTR']}"
+                            )
+                        elif i == 1:
+                            st.info(
+                                f"🥈 **Runner-up:** {result['Headline']} - {result['CTR']}"
+                            )
+                        else:
+                            st.write(f"{i+1}. {result['Headline']} - {result['CTR']}")
+
+                    # Detailed comparison table
+                    comparison_df = pd.DataFrame(comparison_results)[
+                        ["Headline", "CTR", "Engagement"]
+                    ]
+                    st.dataframe(comparison_df, use_container_width=True)
+            else:
+                st.error("❌ Required systems not loaded. Please refresh the page.")
 
     # Footer
     st.markdown("---")
