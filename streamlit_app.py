@@ -546,6 +546,7 @@ def main():
 
     # Add this to your admin code section, right after checking the password:
 
+    # Admin panel in sidebar - hidden unless you have the password
     admin_key = os.getenv("ADMIN_PASSWORD")
 
     if admin_key:
@@ -582,7 +583,6 @@ def main():
                     file_name=f"analytics_{datetime.date.today()}.txt",
                     mime="text/plain",
                 )
-        # No else clause - let sidebar show with just password field
     else:
         # No admin password set - hide sidebar completely
         st.markdown(
@@ -593,12 +593,19 @@ def main():
         """,
             unsafe_allow_html=True,
         )
-        # Mode selector
-        mode = st.radio(
-            "Choose optimization mode:",
-            ["🎯 Single Headline", "📊 Batch Upload", "⚖️ Comparison Mode"],
-            horizontal=True,
-        )
+
+    # Mode selector - ALWAYS define this regardless of admin status
+    mode = st.radio(
+        "Choose optimization mode:",
+        ["🎯 Single Headline", "📊 Batch Upload", "⚖️ Comparison Mode"],
+        horizontal=True,
+    )
+    # Mode selector
+    mode = st.radio(
+        "Choose optimization mode:",
+        ["🎯 Single Headline", "📊 Batch Upload", "⚖️ Comparison Mode"],
+        horizontal=True,
+    )
 
     if mode == "🎯 Single Headline":
         # Single headline optimization
