@@ -5,11 +5,20 @@ import numpy as np
 import logging
 from openai import OpenAI
 from feature_utils import create_article_features_exact, load_preprocessing_components
-import os
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+import os
+
+# Load environment variables (works locally, ignored on Streamlit Cloud)
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    # dotenv not available (like on Streamlit Cloud)
+    pass
+except Exception:
+    # Any other error, continue without dotenv
+    pass
 
 
 class EnhancedLLMHeadlineRewriter:
