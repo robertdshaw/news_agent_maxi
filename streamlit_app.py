@@ -360,8 +360,8 @@ def main():
             st.sidebar.info("No analytics data yet")
 
     # Main tabs
-    tab1, tab2, tab3 = st.tabs(
-        ["🔮 Predict & Rewrite", "🔍 Search Articles", "📊 Headline Rewrite Analysis"]
+    (tab1,) = st.tabs(
+        ["🔮 Predict & Rewrite"]  # "🔍 Search Articles", "📊 Headline Rewrite Analysis"
     )
 
     # Tab 1: Predict & Rewrite
@@ -628,198 +628,198 @@ def main():
             else:
                 st.warning("⚠️ Please enter an article title.")
 
-    # Tab 2: Search Articles
-    with tab2:
-        st.header("Search Articles")
+    # # Tab 2: Search Articles
+    # with tab2:
+    #     st.header("Search Articles")
 
-        search_query = st.text_input(
-            "Search Query",
-            placeholder="Enter keywords or describe the topic...",
-            help="Search through articles by keywords, title, or content.",
-        )
+    #     search_query = st.text_input(
+    #         "Search Query",
+    #         placeholder="Enter keywords or describe the topic...",
+    #         help="Search through articles by keywords, title, or content.",
+    #     )
 
-        col_search1, col_search2 = st.columns(2)
-        with col_search1:
-            num_results = st.slider("Number of results", 5, 20, 10)
+    #     col_search1, col_search2 = st.columns(2)
+    #     with col_search1:
+    #         num_results = st.slider("Number of results", 5, 20, 10)
 
-        if st.button("🔍 Search", type="primary"):
-            if search_query.strip() and search_system:
-                # Log the search event
-                log_event(
-                    "search",
-                    {"query": search_query, "num_results_requested": num_results},
-                )
+    #     if st.button("🔍 Search", type="primary"):
+    #         if search_query.strip() and search_system:
+    #             # Log the search event
+    #             log_event(
+    #                 "search",
+    #                 {"query": search_query, "num_results_requested": num_results},
+    #             )
 
-                with st.spinner("Searching articles..."):
-                    try:
-                        embedder = load_embedder()
-                        query_embedding = embedder.encode([search_query])
-                        query_embedding = query_embedding.astype(np.float32)
-                        faiss.normalize_L2(query_embedding)
+    #             with st.spinner("Searching articles..."):
+    #                 try:
+    #                     embedder = load_embedder()
+    #                     query_embedding = embedder.encode([search_query])
+    #                     query_embedding = query_embedding.astype(np.float32)
+    #                     faiss.normalize_L2(query_embedding)
 
-                        search_k = num_results * 3
-                        distances, indices = search_system["index"].search(
-                            query_embedding, search_k
-                        )
+    #                     search_k = num_results * 3
+    #                     distances, indices = search_system["index"].search(
+    #                         query_embedding, search_k
+    #                     )
 
-                        results = []
-                        for dist, idx in zip(distances[0], indices[0]):
-                            if idx in search_system["mappings"]["idx_to_article_id"]:
-                                article_id = search_system["mappings"][
-                                    "idx_to_article_id"
-                                ][idx]
-                                if article_id in search_system["article_lookup"]:
-                                    article_info = search_system["article_lookup"][
-                                        article_id
-                                    ].copy()
-                                    l2_distance = float(dist)
-                                    similarity_score = 1.0 / (1.0 + l2_distance)
-                                    article_info["similarity_score"] = similarity_score
-                                    results.append(article_info)
+    #                     results = []
+    #                     for dist, idx in zip(distances[0], indices[0]):
+    #                         if idx in search_system["mappings"]["idx_to_article_id"]:
+    #                             article_id = search_system["mappings"][
+    #                                 "idx_to_article_id"
+    #                             ][idx]
+    #                             if article_id in search_system["article_lookup"]:
+    #                                 article_info = search_system["article_lookup"][
+    #                                     article_id
+    #                                 ].copy()
+    #                                 l2_distance = float(dist)
+    #                                 similarity_score = 1.0 / (1.0 + l2_distance)
+    #                                 article_info["similarity_score"] = similarity_score
+    #                                 results.append(article_info)
 
-                                    if len(results) >= num_results:
-                                        break
+    #                                 if len(results) >= num_results:
+    #                                     break
 
-                        if results:
-                            st.subheader(f"📰 Found {len(results)} articles")
-                            for i, article in enumerate(results, 1):
-                                with st.expander(f"{i}. {article['title'][:70]}..."):
-                                    col_art1, col_art2 = st.columns([3, 1])
+    #                     if results:
+    #                         st.subheader(f"📰 Found {len(results)} articles")
+    #                         for i, article in enumerate(results, 1):
+    #                             with st.expander(f"{i}. {article['title'][:70]}..."):
+    #                                 col_art1, col_art2 = st.columns([3, 1])
 
-                                    with col_art1:
-                                        st.write(f"**Title:** {article['title']}")
-                                        if article.get("abstract"):
-                                            abstract_preview = (
-                                                article["abstract"][:200] + "..."
-                                                if len(article["abstract"]) > 200
-                                                else article["abstract"]
-                                            )
-                                            st.write(
-                                                f"**Abstract:** {abstract_preview}"
-                                            )
+    #                                 with col_art1:
+    #                                     st.write(f"**Title:** {article['title']}")
+    #                                     if article.get("abstract"):
+    #                                         abstract_preview = (
+    #                                             article["abstract"][:200] + "..."
+    #                                             if len(article["abstract"]) > 200
+    #                                             else article["abstract"]
+    #                                         )
+    #                                         st.write(
+    #                                             f"**Abstract:** {abstract_preview}"
+    #                                         )
 
-                                    with col_art2:
-                                        st.metric(
-                                            "Similarity",
-                                            f"{article['similarity_score']:.3f}",
-                                        )
-                                        st.write(f"**Category:** {article['category']}")
+    #                                 with col_art2:
+    #                                     st.metric(
+    #                                         "Similarity",
+    #                                         f"{article['similarity_score']:.3f}",
+    #                                     )
+    #                                     st.write(f"**Category:** {article['category']}")
 
-                                        if not pd.isna(article.get("ctr")):
-                                            st.write(
-                                                f"**CTR:** {article['ctr']*100:.2f}%"
-                                            )
+    #                                     if not pd.isna(article.get("ctr")):
+    #                                         st.write(
+    #                                             f"**CTR:** {article['ctr']*100:.2f}%"
+    #                                         )
 
-                                        if not pd.isna(article.get("high_engagement")):
-                                            engagement_status = (
-                                                "🔥 High"
-                                                if article["high_engagement"]
-                                                else "📉 Low"
-                                            )
-                                            st.write(
-                                                f"**Engagement:** {engagement_status}"
-                                            )
-                        else:
-                            st.info("No articles found. Try different keywords.")
-                    except Exception as e:
-                        st.error(f"Search failed: {e}")
-            else:
-                if not search_query.strip():
-                    st.warning("Please enter a search query.")
-                else:
-                    st.error("Search system not available.")
+    #                                     if not pd.isna(article.get("high_engagement")):
+    #                                         engagement_status = (
+    #                                             "🔥 High"
+    #                                             if article["high_engagement"]
+    #                                             else "📉 Low"
+    #                                         )
+    #                                         st.write(
+    #                                             f"**Engagement:** {engagement_status}"
+    #                                         )
+    #                     else:
+    #                         st.info("No articles found. Try different keywords.")
+    #                 except Exception as e:
+    #                     st.error(f"Search failed: {e}")
+    #         else:
+    #             if not search_query.strip():
+    #                 st.warning("Please enter a search query.")
+    #             else:
+    #                 st.error("Search system not available.")
 
-    # Tab 3: Rewrite Analysis
-    with tab3:
-        st.header("Headline Rewrite Analysis")
+    # # Tab 3: Rewrite Analysis
+    # with tab3:
+    #     st.header("Headline Rewrite Analysis")
 
-        if search_system and search_system["metadata"].get("rewrite_analysis"):
-            rewrite_stats = search_system["metadata"]["rewrite_analysis"]
+    #     if search_system and search_system["metadata"].get("rewrite_analysis"):
+    #         rewrite_stats = search_system["metadata"]["rewrite_analysis"]
 
-            # Load detailed rewrite results if available
-            rewrite_file = FAISS_DIR / "rewrite_analysis" / "headline_rewrites.parquet"
-            if rewrite_file.exists():
-                try:
-                    rewrite_df = pd.read_parquet(rewrite_file)
+    #         # Load detailed rewrite results if available
+    #         rewrite_file = FAISS_DIR / "rewrite_analysis" / "headline_rewrites.parquet"
+    #         if rewrite_file.exists():
+    #             try:
+    #                 rewrite_df = pd.read_parquet(rewrite_file)
 
-                    st.subheader("📈 Strategy Performance")
+    #                 st.subheader("📈 Strategy Performance")
 
-                    # Strategy comparison
-                    if "model_ctr_improvement" in rewrite_df.columns:
-                        strategy_performance = (
-                            rewrite_df.groupby("strategy")
-                            .agg(
-                                {
-                                    "quality_score": "mean",
-                                    "readability_improvement": "mean",
-                                    "model_ctr_improvement": "mean",
-                                }
-                            )
-                            .round(4)
-                        )
+    #                 # Strategy comparison
+    #                 if "model_ctr_improvement" in rewrite_df.columns:
+    #                     strategy_performance = (
+    #                         rewrite_df.groupby("strategy")
+    #                         .agg(
+    #                             {
+    #                                 "quality_score": "mean",
+    #                                 "readability_improvement": "mean",
+    #                                 "model_ctr_improvement": "mean",
+    #                             }
+    #                         )
+    #                         .round(4)
+    #                     )
 
-                        fig = px.bar(
-                            strategy_performance.reset_index(),
-                            x="strategy",
-                            y="model_ctr_improvement",
-                            title="Average Model-Based CTR Improvement by Strategy",
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        strategy_performance = (
-                            rewrite_df.groupby("strategy")
-                            .agg(
-                                {
-                                    "quality_score": "mean",
-                                    "readability_improvement": "mean",
-                                    "predicted_ctr_improvement": "mean",
-                                }
-                            )
-                            .round(3)
-                        )
+    #                     fig = px.bar(
+    #                         strategy_performance.reset_index(),
+    #                         x="strategy",
+    #                         y="model_ctr_improvement",
+    #                         title="Average Model-Based CTR Improvement by Strategy",
+    #                     )
+    #                     st.plotly_chart(fig, use_container_width=True)
+    #                 else:
+    #                     strategy_performance = (
+    #                         rewrite_df.groupby("strategy")
+    #                         .agg(
+    #                             {
+    #                                 "quality_score": "mean",
+    #                                 "readability_improvement": "mean",
+    #                                 "predicted_ctr_improvement": "mean",
+    #                             }
+    #                         )
+    #                         .round(3)
+    #                     )
 
-                        fig = px.bar(
-                            strategy_performance.reset_index(),
-                            x="strategy",
-                            y="quality_score",
-                            title="Average Quality Score by Strategy",
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
+    #                     fig = px.bar(
+    #                         strategy_performance.reset_index(),
+    #                         x="strategy",
+    #                         y="quality_score",
+    #                         title="Average Quality Score by Strategy",
+    #                     )
+    #                     st.plotly_chart(fig, use_container_width=True)
 
-                    # Show detailed results
-                    st.subheader("🔍 Detailed Results")
+    #                 # Show detailed results
+    #                 st.subheader("🔍 Detailed Results")
 
-                    display_columns = [
-                        "original_title",
-                        "strategy",
-                        "rewritten_title",
-                        "quality_score",
-                        "readability_improvement",
-                        "predicted_ctr_improvement",
-                    ]
+    #                 display_columns = [
+    #                     "original_title",
+    #                     "strategy",
+    #                     "rewritten_title",
+    #                     "quality_score",
+    #                     "readability_improvement",
+    #                     "predicted_ctr_improvement",
+    #                 ]
 
-                    if "model_ctr_improvement" in rewrite_df.columns:
-                        display_columns.extend(
-                            ["model_ctr_improvement", "original_ctr", "rewritten_ctr"]
-                        )
+    #                 if "model_ctr_improvement" in rewrite_df.columns:
+    #                     display_columns.extend(
+    #                         ["model_ctr_improvement", "original_ctr", "rewritten_ctr"]
+    #                     )
 
-                    available_columns = [
-                        col for col in display_columns if col in rewrite_df.columns
-                    ]
-                    st.dataframe(
-                        rewrite_df[available_columns].head(20), use_container_width=True
-                    )
+    #                 available_columns = [
+    #                     col for col in display_columns if col in rewrite_df.columns
+    #                 ]
+    #                 st.dataframe(
+    #                     rewrite_df[available_columns].head(20), use_container_width=True
+    #                 )
 
-                except Exception as e:
-                    st.error(f"Error loading rewrite analysis: {e}")
-            else:
-                st.info(
-                    "Detailed rewrite analysis not available. Run the FAISS index creation script to generate analysis."
-                )
-        else:
-            st.info(
-                "No rewrite analysis available. The system may be running in offline mode."
-            )
+    #             except Exception as e:
+    #                 st.error(f"Error loading rewrite analysis: {e}")
+    #         else:
+    #             st.info(
+    #                 "Detailed rewrite analysis not available. Run the FAISS index creation script to generate analysis."
+    #             )
+    #     else:
+    #         st.info(
+    #             "No rewrite analysis available. The system may be running in offline mode."
+    #         )
 
     # Footer
     st.markdown("---")
