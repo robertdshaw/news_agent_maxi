@@ -15,5 +15,6 @@
 /source_data/
 /model_output/
 /images/
+/usage_log.txt
 
 # ── End of .gitignore ───────────────────────────────────────────────────────
