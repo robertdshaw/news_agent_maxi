@@ -443,7 +443,7 @@ n = embedding_matrix.shape[0]
 
 if n < 1000:
     print("Using Flat index for exact search")
-    index = index = faiss.IndexFlatL2(d)
+    index = faiss.IndexFlatL2(d)
     index_type = "Flat"
 else:
     print("Using IVF index for approximate search")
