@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore")
 
 
 class CompleteEDAInsightsGenerator:
-    """Generate complete EDA insights file for EfficientLLMHeadlineRewriter"""
+    """Generate complete EDA insights file for EnhancedLLMHeadlineRewriter"""
 
     def __init__(self, preprocessed_data_dir="data/preprocessed/processed_data"):
         """Initialize with your preprocessed data directory"""
