@@ -91,7 +91,7 @@ def create_article_features_exact(title, abstract="", category="news", component
     features["has_exclamation"] = 1 if "!" in title else 0
     features["has_number"] = 1 if any(c.isdigit() for c in title) else 0
     features["has_colon"] = 1 if ":" in title else 0
-    features["has_quotes"] = 1 if any(q in title for q in ['"', "'", '"', '"']) else 0
+    features["has_quotes"] = 1 if any(q in title for q in ['"', "'", '“', '”']) else 0
     features["has_dash"] = 1 if any(d in title for d in ["-", "–", "—"]) else 0
 
     # ========== STEP 4: Advanced headline metrics (exact replication) ==========
