@@ -10,14 +10,13 @@ from sklearn.metrics import (
     average_precision_score,
     precision_recall_curve,
 )
-import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
 from pathlib import Path
 import pickle
 import json
 import warnings
 from datetime import datetime
 from imblearn.over_sampling import SMOTE
+import matplotlib.pyplot as plt
 
 warnings.filterwarnings("ignore")
 

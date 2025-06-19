@@ -1,6 +1,6 @@
 {
   "model_type": "XGBoost_Optuna_Optimized",
-  "training_timestamp": "2025-05-28T17:29:12.785384",
+  "training_timestamp": "2025-06-19T09:10:50.811600",
   "best_parameters": {
     "max_depth": 8,
     "min_child_weight": 3.6458197609358076,

@@ -19,17 +19,17 @@
       "readability",
       "structure"
     ],
-    "average_quality_improvement": 0.1956152758699634,
-    "average_readability_improvement": -9.337331730769234,
+    "average_quality_improvement": 0.21923074494949507,
+    "average_readability_improvement": -5.869715909090903,
     "average_predicted_ctr_improvement": 0.0,
-    "average_model_ctr_improvement": 0.000583418644964695,
+    "average_model_ctr_improvement": 0.00033685704693198204,
     "best_performing_strategy_by_model": "readability",
-    "best_performing_strategy_by_quality": "readability",
+    "best_performing_strategy_by_quality": "structure",
     "semantic_similarity_maintained": 0.0,
     "model_based_ctr_used": true,
-    "positive_model_improvements": 5,
-    "negative_model_improvements": 3,
-    "best_model_improvement": 0.001969028264284134
+    "positive_model_improvements": 4,
+    "negative_model_improvements": 4,
+    "best_model_improvement": 0.00227992981672287
   },
   "config": {
     "embedding_dim": 384,

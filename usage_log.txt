@@ -10,3 +10,9 @@
 {"timestamp": "2025-05-31T20:19:43.448975", "event": "page_visit", "data": {"user_agent": "streamlit_user"}}
 {"timestamp": "2025-05-31T21:59:08.122844", "event": "headline_optimization", "data": {"headline": "EU 'strongly' regrets US plan to double steel tariffs", "category": "news", "mode": "single"}}
 {"timestamp": "2025-05-31T22:08:20.652532", "event": "headline_optimization", "data": {"headline": "EU 'strongly' regrets US plan to double steel tariffs\n", "category": "news", "mode": "single"}}
+{"timestamp": "2025-06-18T22:42:14.524010", "event": "headline_optimization", "data": {"headline": "Israeli air power reigns over Iran, but needs US for deeper impact", "category": "news", "mode": "single"}}
+{"timestamp": "2025-06-18T22:43:48.119964", "event": "headline_optimization", "data": {"headline": "FA charge Chelsea's Mudryk with doping offences", "category": "sports", "mode": "single"}}
+{"timestamp": "2025-06-18T23:24:11.167004", "event": "headline_optimization", "data": {"headline": "Trump's Iran dilemma exposes bitter split in president's circle", "category": "news", "mode": "single"}}
+{"timestamp": "2025-06-19T09:39:14.087732", "event": "headline_optimization", "data": {"headline": "Trump's Iran dilemma exposes bitter split in president's circle", "category": "news", "mode": "single"}}
+{"timestamp": "2025-06-19T09:40:54.214650", "event": "headline_optimization", "data": {"headline": "Trump's Iran dilemma exposes bitter split in president's circle", "category": "news", "mode": "single"}}
+{"timestamp": "2025-06-19T09:41:48.582688", "event": "headline_comparison", "data": {"headlines_count": 2, "category": "news"}}
